@@ -3,7 +3,19 @@ name: Deploy SAL Core
 on:
   push:
     branches: [staging]
+    paths:
+      - 'sal-core.php'
+      - 'js/**'
+      - 'css/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-sal-core-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy-staging:
@@ -11,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Deploy to STAGING via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4
@@ -20,9 +34,11 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/
           local-dir: ./
-          # Se o host não aceitar FTPS, descomente:
-          # protocol: ftp
-          # security: loose
+          protocol: ftp
+          security: loose
+          exclude: |
+            .git*
+            .github/**
 
       - name: Touch deploy flag
         run: echo "deployed $(date -u)" > sal-deploy.flag
@@ -35,6 +51,8 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/../../
           local-dir: .
+          protocol: ftp
+          security: loose
           exclude: |
             **/*
           include: |
@@ -45,6 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Deploy to PROD via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4
@@ -54,6 +74,11 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_PROD }}/
           local-dir: ./
+          protocol: ftp
+          security: loose
+          exclude: |
+            .git*
+            .github/**
 
       - name: Touch deploy flag
         run: echo "deployed $(date -u)" > sal-deploy.flag
@@ -66,6 +91,8 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_PROD }}/../../
           local-dir: .
+          protocol: ftp
+          security: loose
           exclude: |
             **/*
           include: |
