@@ -26,8 +26,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Validate secrets
+        run: |
+          test -n "${{ secrets.FTP_HOST }}" || (echo "::error::Missing secret: FTP_HOST" && exit 1)
+          test -n "${{ secrets.FTP_USER }}" || (echo "::error::Missing secret: FTP_USER" && exit 1)
+          test -n "${{ secrets.FTP_PASS }}" || (echo "::error::Missing secret: FTP_PASS" && exit 1)
+          test -n "${{ secrets.REMOTE_DIR_STAGING }}" || (echo "::error::Missing secret: REMOTE_DIR_STAGING" && exit 1)
+
       - name: Deploy to STAGING via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USER }}
@@ -37,4 +44,70 @@ jobs:
           protocol: ftp
           security: loose
           exclude: |
-            .
+            .git*
+            .github/**
+
+      - name: Touch deploy flag
+        run: echo "deployed $(date -u)" > sal-deploy.flag
+
+      - name: Upload deploy flag
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/../../
+          local-dir: .
+          protocol: ftp
+          security: loose
+          exclude: |
+            **/*
+          include: |
+            sal-deploy.flag
+
+  deploy-production:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate secrets (prod)
+        run: |
+          test -n "${{ secrets.FTP_HOST }}" || (echo "::error::Missing secret: FTP_HOST" && exit 1)
+          test -n "${{ secrets.FTP_USER }}" || (echo "::error::Missing secret: FTP_USER" && exit 1)
+          test -n "${{ secrets.FTP_PASS }}" || (echo "::error::Missing secret: FTP_PASS" && exit 1)
+          test -n "${{ secrets.REMOTE_DIR_PROD }}" || (echo "::error::Missing secret: REMOTE_DIR_PROD" && exit 1)
+
+      - name: Deploy to PROD via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          server-dir: ${{ secrets.REMOTE_DIR_PROD }}/
+          local-dir: ./
+          protocol: ftp
+          security: loose
+          exclude: |
+            .git*
+            .github/**
+
+      - name: Touch deploy flag
+        run: echo "deployed $(date -u)" > sal-deploy.flag
+
+      - name: Upload deploy flag
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          server-dir: ${{ secrets.REMOTE_DIR_PROD }}/../../
+          local-dir: .
+          protocol: ftp
+          security: loose
+          exclude: |
+            **/*
+          include: |
+            sal-deploy.flag
