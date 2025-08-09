@@ -1,17 +1,9 @@
-# criar pastas padrão do plugin e mover arquivos
-mkdir -p js css
-git mv balance.js js/balance.js 2>/dev/null || mv balance.js js/balance.js
-git mv sal-core.css css/sal-core.css 2>/dev/null || mv sal-core.css css/sal-core.css
-
-# adicionar o workflow de deploy
-mkdir -p .github/workflows
-cat > .github/workflows/deploy.yml <<'YAML'
 name: Deploy SAL Core
 
 on:
   push:
-    branches: [ staging ]
-  workflow_dispatch: {}
+    branches: [staging]
+  workflow_dispatch:
 
 jobs:
   deploy-staging:
@@ -28,7 +20,7 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/
           local-dir: ./
-          # Se FTPS der erro no teu host, descomenta as 2 linhas abaixo:
+          # Se o host não aceitar FTPS, descomente:
           # protocol: ftp
           # security: loose
 
@@ -53,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Deploy to PROD via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4
         with:
@@ -61,8 +54,10 @@ jobs:
           password: ${{ secrets.FTP_PASS }}
           server-dir: ${{ secrets.REMOTE_DIR_PROD }}/
           local-dir: ./
+
       - name: Touch deploy flag
         run: echo "deployed $(date -u)" > sal-deploy.flag
+
       - name: Upload deploy flag
         uses: SamKirkland/FTP-Deploy-Action@v4
         with:
