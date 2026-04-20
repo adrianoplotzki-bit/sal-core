@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e endpoint de sinalização (SignalK).
- * Version:     0.3
+ * Version:     0.4
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.3' );
+define( 'SAL_CORE_VERSION', '0.4' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -55,12 +55,15 @@ register_activation_hook( __FILE__, 'sal_core_activate' );
 /**
  * Regista rotas REST personalizadas para ingestão de dados e para
  * disponibilizar o último ponto (usado pelo dashboard em tempo real).
+ *
+ * O endpoint /sk (ingestão) exige autenticação via header X-SAL-API-Key.
+ * O endpoint /last permanece público (consumido pelo dashboard front-end).
  */
 function sal_core_register_rest() {
     register_rest_route( 'sal/v1', '/sk', array(
         'methods'  => 'POST',
         'callback' => 'sal_core_handle_sk_data',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'sal_core_sk_permission_check',
     ) );
     register_rest_route( 'sal/v1', '/last', array(
         'methods'  => 'GET',
@@ -71,33 +74,121 @@ function sal_core_register_rest() {
 add_action( 'rest_api_init', 'sal_core_register_rest' );
 
 /**
- * Processa os dados JSON enviados do barco. Qualquer campo ausente é
- * gravado como null para simplificar a estrutura da tabela.
+ * Verifica a API key no header X-SAL-API-Key contra a chave salva nas opções.
+ * Comparação em tempo constante via hash_equals para evitar timing attacks.
  *
  * @param WP_REST_Request $request
- * @return array|
+ * @return true|WP_Error
+ */
+function sal_core_sk_permission_check( WP_REST_Request $request ) {
+    $expected = trim( (string) get_option( 'sal_core_sk_api_key', '' ) );
+    if ( $expected === '' ) {
+        return new WP_Error(
+            'sal_no_key_configured',
+            'API key não configurada. Acesse Configurações → SAL Core para gerar uma.',
+            array( 'status' => 503 )
+        );
+    }
+    $provided = $request->get_header( 'x_sal_api_key' );
+    if ( ! $provided ) {
+        $provided = $request->get_header( 'X-SAL-API-Key' );
+    }
+    if ( ! $provided || ! is_string( $provided ) ) {
+        return new WP_Error( 'sal_auth_missing', 'Header X-SAL-API-Key ausente.', array( 'status' => 401 ) );
+    }
+    if ( ! hash_equals( $expected, trim( $provided ) ) ) {
+        return new WP_Error( 'sal_auth_invalid', 'API key inválida.', array( 'status' => 403 ) );
+    }
+    return true;
+}
+
+/**
+ * Helper: valida campo numérico. Retorna float se válido, null se ausente,
+ * false se presente mas inválido (tipo errado, NaN/inf, fora do intervalo).
+ */
+function sal_core_valid_num( $v, $min = null, $max = null ) {
+    if ( $v === null || $v === '' ) {
+        return null;
+    }
+    if ( ! is_numeric( $v ) ) {
+        return false;
+    }
+    $f = floatval( $v );
+    if ( ! is_finite( $f ) ) {
+        return false;
+    }
+    if ( $min !== null && $f < $min ) {
+        return false;
+    }
+    if ( $max !== null && $f > $max ) {
+        return false;
+    }
+    return $f;
+}
+
+/**
+ * Processa os dados JSON enviados do barco. Cada campo numérico é validado
+ * dentro de um intervalo plausível; valores fora do intervalo fazem o request
+ * falhar com 400 para evitar lixo na base.
+ *
+ * @param WP_REST_Request $request
+ * @return array|WP_REST_Response
  */
 function sal_core_handle_sk_data( WP_REST_Request $request ) {
     $data = $request->get_json_params();
     if ( empty( $data ) || ! is_array( $data ) ) {
         return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Payload vazio' ), 400 );
     }
+
+    // Validação por campo (cada um pode ser null se ausente).
+    $fields = array(
+        'lat'        => array( -90,    90 ),
+        'lon'        => array( -180,   180 ),
+        'sog'        => array( 0,      100 ),   // nós
+        'cog'        => array( 0,      360 ),   // graus
+        'awa'        => array( -180,   180 ),   // graus
+        'aws'        => array( 0,      200 ),   // nós
+        'waterspeed' => array( 0,      100 ),
+        'heading'    => array( 0,      360 ),
+        'batt'       => array( 0,      200 ),   // volts (margem ampla)
+        'depth'      => array( 0,      12000 ), // metros
+    );
+    $clean = array();
+    foreach ( $fields as $name => $range ) {
+        $v = sal_core_valid_num( isset( $data[ $name ] ) ? $data[ $name ] : null, $range[0], $range[1] );
+        if ( $v === false ) {
+            return new WP_REST_Response( array( 'status' => 'error', 'message' => "Campo {$name} fora do intervalo válido" ), 400 );
+        }
+        $clean[ $name ] = $v;
+    }
+
+    // Timestamp.
+    if ( isset( $data['ts'] ) ) {
+        $ts_unix = strtotime( (string) $data['ts'] );
+        if ( ! $ts_unix ) {
+            return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Campo ts inválido' ), 400 );
+        }
+        $ts = gmdate( 'Y-m-d H:i:s', $ts_unix );
+    } else {
+        $ts = current_time( 'mysql', 1 );
+    }
+
     global $wpdb;
     $table_name = $wpdb->prefix . 'sal_track';
     $row = array(
-        'ts'         => isset( $data['ts'] ) ? gmdate( 'Y-m-d H:i:s', strtotime( $data['ts'] ) ) : current_time( 'mysql', 1 ),
-        'lat'        => isset( $data['lat'] ) ? floatval( $data['lat'] ) : null,
-        'lon'        => isset( $data['lon'] ) ? floatval( $data['lon'] ) : null,
-        'sog'        => isset( $data['sog'] ) ? floatval( $data['sog'] ) : null,
-        'cog'        => isset( $data['cog'] ) ? floatval( $data['cog'] ) : null,
-        'awa'        => isset( $data['awa'] ) ? floatval( $data['awa'] ) : null,
-        'aws'        => isset( $data['aws'] ) ? floatval( $data['aws'] ) : null,
-        'waterspeed' => isset( $data['waterspeed'] ) ? floatval( $data['waterspeed'] ) : null,
-        'heading'    => isset( $data['heading'] ) ? floatval( $data['heading'] ) : null,
-        'batt'       => isset( $data['batt'] ) ? floatval( $data['batt'] ) : null,
+        'ts'         => $ts,
+        'lat'        => $clean['lat'],
+        'lon'        => $clean['lon'],
+        'sog'        => $clean['sog'],
+        'cog'        => $clean['cog'],
+        'awa'        => $clean['awa'],
+        'aws'        => $clean['aws'],
+        'waterspeed' => $clean['waterspeed'],
+        'heading'    => $clean['heading'],
+        'batt'       => $clean['batt'],
         'ais'        => isset( $data['ais'] ) ? wp_json_encode( $data['ais'] ) : null,
-        'depth'      => isset( $data['depth'] ) ? floatval( $data['depth'] ) : null,
-        'src'        => isset( $data['src'] ) ? sanitize_text_field( $data['src'] ) : null,
+        'depth'      => $clean['depth'],
+        'src'        => isset( $data['src'] ) ? sanitize_text_field( (string) $data['src'] ) : null,
     );
     $wpdb->insert( $table_name, $row );
     return array( 'ok' => true, 'id' => $wpdb->insert_id );
@@ -146,8 +237,39 @@ function sal_core_register_settings() {
     register_setting( 'sal_core_settings', 'sal_core_apoia_campaign' );
     register_setting( 'sal_core_settings', 'sal_core_apoia_key' );
     register_setting( 'sal_core_settings', 'sal_core_apoia_secret' );
+    register_setting( 'sal_core_settings', 'sal_core_sk_api_key' );
 }
 add_action( 'admin_init', 'sal_core_register_settings' );
+
+/**
+ * Gera automaticamente uma API key para o endpoint de ingestão /sk se ainda
+ * não existir uma configurada. Rodado apenas no admin para não atrasar o
+ * front-end.
+ */
+function sal_core_ensure_sk_api_key() {
+    $key = get_option( 'sal_core_sk_api_key' );
+    if ( empty( $key ) ) {
+        $key = wp_generate_password( 40, false, false );
+        update_option( 'sal_core_sk_api_key', $key, false );
+    }
+}
+add_action( 'admin_init', 'sal_core_ensure_sk_api_key' );
+
+/**
+ * Trata o botão "Gerar nova chave" via admin-post. Sobrescreve a chave atual
+ * por uma nova aleatória. Exige permissão manage_options e nonce válido.
+ */
+function sal_core_handle_regenerate_sk_key() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'Sem permissão.' );
+    }
+    check_admin_referer( 'sal_core_regenerate_sk_key' );
+    $new_key = wp_generate_password( 40, false, false );
+    update_option( 'sal_core_sk_api_key', $new_key, false );
+    wp_safe_redirect( add_query_arg( array( 'page' => 'sal_core_settings', 'sal_sk_regenerated' => 1 ), admin_url( 'options-general.php' ) ) );
+    exit;
+}
+add_action( 'admin_post_sal_core_regenerate_sk_key', 'sal_core_handle_regenerate_sk_key' );
 
 /**
  * Adiciona a página de configurações ao menu de opções do WordPress.
@@ -199,7 +321,29 @@ function sal_core_render_settings_page() {
                     <td><input type="text" id="sal_core_apoia_secret" name="sal_core_apoia_secret" value="<?php echo esc_attr( get_option( 'sal_core_apoia_secret' ) ); ?>" class="regular-text code" size="80" /></td>
                 </tr>
             </table>
+
+            <h2>Telemetria SignalK</h2>
+            <?php if ( isset( $_GET['sal_sk_regenerated'] ) ) : ?>
+                <div class="notice notice-success"><p>Nova API key gerada. Atualize o cliente que envia telemetria do barco.</p></div>
+            <?php endif; ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="sal_core_sk_api_key">API key (header <code>X-SAL-API-Key</code>)</label></th>
+                    <td>
+                        <input type="text" id="sal_core_sk_api_key" name="sal_core_sk_api_key" value="<?php echo esc_attr( get_option( 'sal_core_sk_api_key' ) ); ?>" class="regular-text code" size="80" readonly />
+                        <p class="description">
+                            Use esta chave no header <code>X-SAL-API-Key</code> ao fazer <code>POST /wp-json/sal/v1/sk</code>.
+                            Sem header válido o endpoint responde 401/403.
+                        </p>
+                    </td>
+                </tr>
+            </table>
             <?php submit_button(); ?>
+        </form>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:8px;" onsubmit="return confirm('Gerar nova API key vai invalidar a atual. Confirmar?');">
+            <input type="hidden" name="action" value="sal_core_regenerate_sk_key" />
+            <?php wp_nonce_field( 'sal_core_regenerate_sk_key' ); ?>
+            <?php submit_button( 'Gerar nova API key', 'secondary', 'submit', false ); ?>
         </form>
     </div>
     <?php

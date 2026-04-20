@@ -1,9 +1,8 @@
-name: Deploy SAL Core (staging)
+name: Deploy SAL Core (staging, manual backup via SFTP)
 
+# Suplantado por deploy.yml (FTP). Mantido como rota manual alternativa via SFTP
+# caso o FTP esteja indisponível — NÃO roda mais em push automático.
 on:
-  push:
-    branches:
-      - staging
   workflow_dispatch:
 
 jobs:
