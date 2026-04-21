@@ -18,13 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to STAGING via FTP
+      - name: Deploy to STAGING via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          protocol: sftp
           local-dir: ./
           server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/
           exclude: |
@@ -38,10 +38,10 @@ jobs:
       - name: Upload deploy flag
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          protocol: sftp
           local-dir: ./
           server-dir: ${{ secrets.REMOTE_DIR_STAGING }}/
           exclude: |
@@ -55,13 +55,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to PROD via FTP
+      - name: Deploy to PROD via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          protocol: sftp
           local-dir: ./
           server-dir: ${{ secrets.REMOTE_DIR_PROD }}/
           exclude: |
@@ -78,13 +78,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy theme to STAGING via FTP
+      - name: Deploy theme to STAGING via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          protocol: sftp
           local-dir: ./theme/sal-theme/
           server-dir: ${{ secrets.REMOTE_DIR_THEMES_STAGING }}/sal-theme/
           exclude: |
@@ -102,13 +102,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy theme to PROD via FTP
+      - name: Deploy theme to PROD via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          protocol: sftp
           local-dir: ./theme/sal-theme/
           server-dir: ${{ secrets.REMOTE_DIR_THEMES_PROD }}/sal-theme/
           exclude: |
