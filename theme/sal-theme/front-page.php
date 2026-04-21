@@ -6,10 +6,11 @@
  * "página inicial" em Configurações → Leitura, OU quando existe esta
  * template no tema (WP prefere front-page.php sobre index.php para a home).
  *
- * Estrutura por etapa:
- *   Etapa 5:  Hero
- *   Etapa 6:  Grid .sal-home-grid — coluna esquerda (último vídeo + transparência)
- *   Etapa 7:  Grid .sal-home-grid — coluna direita  (sobre o SAL + comunidade + newsletter)
+ * Estrutura:
+ *   Hero
+ *   Grid 7fr/5fr:
+ *     Col esquerda: último vídeo + transparência
+ *     Col direita:  sobre o SAL + comunidade + newsletter
  *
  * @package sal-theme
  */
@@ -22,26 +23,22 @@ get_header();
 	<?php /* ── Hero ──────────────────────────────────────────────────────── */ ?>
 	<?php get_template_part( 'template-parts/home/hero' ); ?>
 
-	<?php /* ── Grid principal da home ─────────────────────────────────────── */ ?>
+	<?php /* ── Grid principal ───────────────────────────────────────────── */ ?>
 	<section class="sal-home-section">
 		<div class="sal-container">
 			<div class="sal-home-grid">
 
-				<?php /* ── Coluna esquerda (7fr) — vídeo + transparência ── */ ?>
+				<!-- Coluna esquerda (7fr): vídeo + transparência -->
 				<div class="sal-home-grid__col--left">
 					<?php get_template_part( 'template-parts/home/latest-video' ); ?>
 					<?php get_template_part( 'template-parts/home/transparency' ); ?>
 				</div><!-- .sal-home-grid__col--left -->
 
-				<?php
-				/*
-				 * ── Coluna direita (5fr) — Etapa 7 ──────────────────────
-				 *
-				 * about-sal + community + newsletter serão adicionados aqui.
-				 */
-				?>
+				<!-- Coluna direita (5fr): sobre o SAL + comunidade + newsletter -->
 				<div class="sal-home-grid__col--right">
-					<!-- Conteúdo da coluna direita será adicionado na Etapa 7 -->
+					<?php get_template_part( 'template-parts/home/about-sal' ); ?>
+					<?php get_template_part( 'template-parts/home/community' ); ?>
+					<?php get_template_part( 'template-parts/home/newsletter' ); ?>
 				</div><!-- .sal-home-grid__col--right -->
 
 			</div><!-- .sal-home-grid -->

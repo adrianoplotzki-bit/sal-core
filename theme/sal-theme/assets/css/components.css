@@ -564,3 +564,210 @@
 .sal-trans-card__link--green {
 	color: var(--sal-green);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. O QUE É O SAL (ABOUT)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sal-about-card {
+	background: var(--sal-card);
+	border: 1px solid var(--sal-border);
+	border-radius: var(--sal-radius-xl);
+	overflow: hidden;
+	box-shadow: var(--sal-shadow-sm);
+}
+
+/* Título dentro do card — padding lateral, margem menor que o padrão */
+.sal-about-card__title {
+	font-size: var(--sal-fs-2xl);
+	margin-bottom: var(--sal-sp-4);
+	padding: var(--sal-sp-6) var(--sal-sp-6) 0;
+}
+
+/* Foto — largura total, altura fixa com object-fit */
+.sal-about-card__img {
+	width: 100%;
+	height: 12rem;   /* 192px — h-48 do protótipo */
+	object-fit: cover;
+	object-position: center top;
+	display: block;
+	margin-top: var(--sal-sp-4);
+}
+
+/* Área de texto e link */
+.sal-about-card__body {
+	padding: var(--sal-sp-4) var(--sal-sp-6) var(--sal-sp-6);
+}
+
+.sal-about-card__text {
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-muted);
+	line-height: 1.6;
+	margin-bottom: var(--sal-sp-4);
+}
+
+/* Link sublinhado com borda inferior, hover vermelho */
+.sal-about-card__link {
+	display: inline-block;
+	font-size: var(--sal-fs-sm);
+	font-weight: var(--sal-weight-semibold);
+	color: var(--sal-ink);
+	text-decoration: none;
+	border-bottom: 2px solid var(--sal-ink);
+	padding-bottom: 2px;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.sal-about-card__link:hover,
+.sal-about-card__link:focus-visible {
+	color: var(--sal-red);
+	border-bottom-color: var(--sal-red);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. DA COMUNIDADE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Mosaico fotográfico: grid 2×2, linha inferior ocupa as 2 colunas */
+.sal-community__mosaic {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-template-rows: 8rem 6rem;   /* top 128px, bottom 96px */
+	gap: var(--sal-sp-2);
+	margin-bottom: var(--sal-sp-4);
+	border-radius: var(--sal-radius-xl);
+	overflow: hidden;
+}
+
+.sal-community__img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+/* Cantos arredondados — apenas os exteriores do mosaico */
+.sal-community__img--tl { border-radius: var(--sal-radius-lg) 0 0 0; }
+.sal-community__img--tr { border-radius: 0 var(--sal-radius-lg) 0 0; }
+.sal-community__img--bottom {
+	grid-column: 1 / -1;    /* span 2 colunas */
+	border-radius: 0 0 var(--sal-radius-lg) var(--sal-radius-lg);
+}
+
+/* Card de quote */
+.sal-community__quote {
+	background: var(--sal-bg);
+	border-radius: var(--sal-radius-xl);
+	padding: var(--sal-sp-5);
+	margin: 0;
+}
+
+.sal-community__quote blockquote {
+	margin: 0;
+	padding: 0;
+}
+
+.sal-community__quote p {
+	font-style: italic;
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-body);
+	line-height: 1.6;
+	margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. NEWSLETTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sal-newsletter-card {
+	background-color: var(--sal-blue-bg);
+	border-radius: var(--sal-radius-xl);
+	padding: var(--sal-sp-6);
+}
+
+.sal-newsletter-card__title {
+	font-size: var(--sal-fs-xl);
+	font-weight: var(--sal-weight-black);
+	color: var(--sal-ink);
+	line-height: 1.2;
+	margin-bottom: var(--sal-sp-2);
+}
+
+.sal-newsletter-card__desc {
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-muted);
+	line-height: 1.5;
+	margin-bottom: var(--sal-sp-4);
+}
+
+/* Form: input + botão em linha */
+.sal-newsletter {
+	display: flex;
+	gap: var(--sal-sp-2);
+}
+
+.sal-newsletter__input {
+	flex: 1;
+	min-width: 0;    /* evita overflow em flex */
+	padding: var(--sal-sp-3) var(--sal-sp-4);
+	font-family: var(--sal-font-sans);
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-body);
+	background: var(--sal-card);
+	border: 1px solid var(--sal-border);
+	border-radius: var(--sal-radius);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sal-newsletter__input:focus {
+	outline: none;
+	border-color: var(--sal-blue);
+	box-shadow: 0 0 0 3px rgba(26, 91, 143, 0.15);
+}
+
+.sal-newsletter__input::placeholder {
+	color: var(--sal-muted);
+}
+
+.sal-newsletter__button {
+	flex-shrink: 0;
+	padding: var(--sal-sp-3) var(--sal-sp-4);
+	font-family: var(--sal-font-sans);
+	font-size: var(--sal-fs-sm);
+	font-weight: var(--sal-weight-semibold);
+	color: #ffffff;
+	background-color: var(--sal-blue);
+	border: none;
+	border-radius: var(--sal-radius);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color 0.15s ease;
+}
+
+.sal-newsletter__button:hover,
+.sal-newsletter__button:focus-visible {
+	background-color: #155f8f;  /* tom ligeiramente mais escuro que --sal-blue */
+}
+
+.sal-newsletter__button:focus-visible {
+	outline: 2px solid var(--sal-blue);
+	outline-offset: 2px;
+}
+
+/* Placeholder quando action não está configurado */
+.sal-newsletter__placeholder {
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-muted);
+	font-style: italic;
+}
+
+/* Mobile: empilhar input e botão */
+@media (max-width: 480px) {
+	.sal-newsletter {
+		flex-direction: column;
+	}
+
+	.sal-newsletter__button {
+		width: 100%;
+	}
+}
