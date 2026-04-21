@@ -6,12 +6,12 @@
  * populados nas etapas seguintes (design system, header, etc.).
  *
  * @package sal-theme
- * @version 0.1.0
+ * @version 1.0.0
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SAL_THEME_VERSION', '0.1.0' );
+define( 'SAL_THEME_VERSION', '1.0.0' );
 define( 'SAL_THEME_URI', get_template_directory_uri() );
 
 // ---------------------------------------------------------------------------

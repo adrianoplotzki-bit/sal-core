@@ -57,7 +57,7 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 
 			<!-- Botão secundário: transparência (ghost branco com ícone de gráfico) -->
 			<a class="sal-btn sal-btn--ghost"
-			   href="<?php echo $balanco_url; ?>">
+			   href="<?php echo esc_url( $balanco_url ); ?>">
 				<!-- Ícone mini-gráfico de barras (SVG inline, acessível via aria-hidden) -->
 				<svg aria-hidden="true" focusable="false"
 				     width="20" height="20" viewBox="0 0 24 24"

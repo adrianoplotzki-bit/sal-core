@@ -18,6 +18,10 @@
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
 
+<a class="sal-skip-link" href="#sal-main">
+	<?php esc_html_e( 'Pular para o conteúdo', 'sal-theme' ); ?>
+</a>
+
 <header class="sal-header" role="banner">
 	<div class="sal-container sal-header__inner">
 

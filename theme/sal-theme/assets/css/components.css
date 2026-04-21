@@ -13,6 +13,42 @@
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   0. ACESSIBILIDADE GLOBAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Skip link (navega direto ao conteúdo para teclado / leitores de tela) ── */
+.sal-skip-link {
+	position: absolute;
+	top: -100%;
+	left: var(--sal-sp-4);
+	z-index: 9999;
+	padding: var(--sal-sp-2) var(--sal-sp-4);
+	background: var(--sal-red);
+	color: #ffffff;
+	font-weight: var(--sal-weight-semibold);
+	font-size: var(--sal-fs-sm);
+	text-decoration: none;
+	border-radius: var(--sal-radius);
+	transition: top 0.1s ease;
+}
+
+.sal-skip-link:focus {
+	top: var(--sal-sp-4);
+}
+
+/* ─── Reduzir movimento para quem prefere — respeitar prefers-reduced-motion ─ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    1. HEADER
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -281,6 +317,8 @@
 	letter-spacing: -0.025em;
 	color: #ffffff;
 	margin-bottom: var(--sal-sp-4);
+	/* Sombra sutil garante legibilidade mesmo em áreas claras da foto */
+	text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* ─── Subtítulo ────────────────────────────────────────────────────────────── */
