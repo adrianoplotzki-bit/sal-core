@@ -232,3 +232,100 @@
 		font-size: var(--sal-fs-sm);
 	}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. HERO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Wrapper da seção ─────────────────────────────────────────────────────── */
+.sal-hero {
+	position: relative;
+	min-height: 600px;
+	display: flex;
+	align-items: center;
+	overflow: hidden; /* garante que a imagem não vaze */
+}
+
+/* ─── Imagem de fundo ──────────────────────────────────────────────────────── */
+.sal-hero__bg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: center top; /* mantém Adriano enquadrado */
+}
+
+/* ─── Overlay escuro (rgba 40%) ────────────────────────────────────────────── */
+.sal-hero__overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
+	z-index: 1;
+}
+
+/* ─── Bloco de conteúdo ────────────────────────────────────────────────────── */
+.sal-hero__content {
+	position: relative;
+	z-index: 2;          /* acima do overlay */
+	color: #ffffff;
+	max-width: 640px;    /* largura do texto — fixo, não via token */
+	padding-block: var(--sal-sp-16); /* respiro vertical */
+}
+
+/* ─── Título principal ─────────────────────────────────────────────────────── */
+.sal-hero__title {
+	font-size: clamp(2.5rem, 5vw, 3.75rem); /* 40px → 60px */
+	font-weight: var(--sal-weight-black);    /* 800 */
+	line-height: 1.1;
+	letter-spacing: -0.025em;
+	color: #ffffff;
+	margin-bottom: var(--sal-sp-4);
+}
+
+/* ─── Subtítulo ────────────────────────────────────────────────────────────── */
+.sal-hero__subtitle {
+	font-size: var(--sal-fs-lg);  /* 18px */
+	font-weight: var(--sal-weight-regular);
+	line-height: 1.6;
+	color: rgba(255, 255, 255, 0.88);
+	margin-bottom: var(--sal-sp-8);
+}
+
+/* ─── Área de botões ───────────────────────────────────────────────────────── */
+.sal-hero__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--sal-sp-4);
+	align-items: center;
+}
+
+/* ─── Ajuste do botão primário no contexto hero ────────────────────────────── */
+.sal-hero .sal-btn--primary {
+	font-size: var(--sal-fs-base);
+	padding: var(--sal-sp-3) var(--sal-sp-8);
+}
+
+/* ─── Ajuste do botão ghost no contexto hero ───────────────────────────────── */
+.sal-hero .sal-btn--ghost {
+	font-size: var(--sal-fs-base);
+	padding: var(--sal-sp-3) var(--sal-sp-8);
+}
+
+/* ─── Responsivo: hero um pouco menor em mobile ────────────────────────────── */
+@media (max-width: 640px) {
+	.sal-hero {
+		min-height: 480px;
+	}
+
+	.sal-hero__actions {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.sal-hero .sal-btn--primary,
+	.sal-hero .sal-btn--ghost {
+		width: 100%;
+		justify-content: center;
+	}
+}
