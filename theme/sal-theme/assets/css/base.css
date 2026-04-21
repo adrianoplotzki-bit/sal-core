@@ -1,0 +1,271 @@
+/**
+ * SAL Theme — base.css
+ *
+ * Reset moderno, tipografia global, utilitários de layout e componentes
+ * de botão. Depende de tokens.css (deve ser carregado antes).
+ *
+ * @package sal-theme
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. RESET MODERNO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Evita zoom de fonte em iOS ao girar o dispositivo */
+  -webkit-text-size-adjust: 100%;
+  /* Scroll suave para âncoras internas */
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100dvh;
+  line-height: 1.6;
+  font-family: var(--sal-font-sans);
+  font-size: var(--sal-fs-base);
+  font-weight: var(--sal-weight-regular);
+  color: var(--sal-body);
+  background-color: var(--sal-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. ESCALA DE HEADINGS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--sal-font-sans);
+  font-weight: var(--sal-weight-black);
+  color: var(--sal-ink);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: var(--sal-fs-4xl);   /* 36px mobile → escala via clamp nos componentes */
+}
+
+h2 {
+  font-size: var(--sal-fs-3xl);   /* 30px */
+}
+
+h3 {
+  font-size: var(--sal-fs-2xl);   /* 24px */
+}
+
+h4 {
+  font-size: var(--sal-fs-xl);    /* 20px */
+  font-weight: var(--sal-weight-semibold);
+}
+
+/* ─── Escala responsiva (≥ 768px) ─────────────────────────────────────────── */
+@media (min-width: 768px) {
+  h1 { font-size: var(--sal-fs-5xl); }   /* 48px */
+  h2 { font-size: var(--sal-fs-4xl); }   /* 36px */
+  h3 { font-size: var(--sal-fs-3xl); }   /* 30px */
+  h4 { font-size: var(--sal-fs-2xl); }   /* 24px */
+}
+
+/* ─── Fonte display (Bebas Neue) — para menus e destaques ─────────────────── */
+.sal-display {
+  font-family: var(--sal-font-display);
+  font-weight: var(--sal-weight-regular); /* Bebas Neue é naturalmente bold */
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. LINKS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+a {
+  color: var(--sal-ink);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+a:hover,
+a:focus-visible {
+  color: var(--sal-red);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--sal-red);
+  outline-offset: 3px;
+  border-radius: var(--sal-radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. LAYOUT — CONTAINER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sal-container {
+  max-width: var(--sal-container);
+  margin-inline: auto;
+  padding-inline: var(--sal-gutter);
+  width: 100%;
+}
+
+/* Gutter mais generoso em telas médias e grandes */
+@media (min-width: 640px) {
+  .sal-container {
+    padding-inline: var(--sal-sp-8); /* 2rem = 32px */
+  }
+}
+
+@media (min-width: 1280px) {
+  .sal-container {
+    padding-inline: var(--sal-sp-12); /* 3rem = 48px */
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. BOTÕES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+.sal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sal-sp-2);
+  padding: var(--sal-sp-3) var(--sal-sp-6);
+  font-family: var(--sal-font-sans);
+  font-size: var(--sal-fs-sm);
+  font-weight: var(--sal-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  border-radius: var(--sal-radius);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color           0.15s ease,
+    border-color    0.15s ease,
+    box-shadow      0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sal-btn:focus-visible {
+  outline: 2px solid var(--sal-red);
+  outline-offset: 3px;
+}
+
+.sal-btn:disabled,
+.sal-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ─── Variante primária (vermelho) ─────────────────────────────────────────── */
+.sal-btn--primary {
+  background-color: var(--sal-red);
+  color: #ffffff;
+  border-color: var(--sal-red);
+}
+
+.sal-btn--primary:hover,
+.sal-btn--primary:focus-visible {
+  background-color: var(--sal-red-dark);
+  border-color: var(--sal-red-dark);
+  color: #ffffff;
+  box-shadow: var(--sal-shadow);
+}
+
+/* ─── Variante ghost (branco com borda) ────────────────────────────────────── */
+.sal-btn--ghost {
+  background-color: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.sal-btn--ghost:hover,
+.sal-btn--ghost:focus-visible {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+/* Variante ghost sobre fundo claro (quando usado fora do hero) */
+.sal-btn--ghost-dark {
+  background-color: transparent;
+  color: var(--sal-ink);
+  border-color: var(--sal-border);
+}
+
+.sal-btn--ghost-dark:hover,
+.sal-btn--ghost-dark:focus-visible {
+  border-color: var(--sal-ink);
+  color: var(--sal-ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. UTILITÁRIOS MÍNIMOS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Texto auxiliar / metadados */
+.sal-muted {
+  color: var(--sal-muted);
+  font-size: var(--sal-fs-sm);
+}
+
+/* Visualmente oculto mas acessível a leitores de tela */
+.sal-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

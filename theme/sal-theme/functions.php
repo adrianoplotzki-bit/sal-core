@@ -50,6 +50,22 @@ function sal_theme_setup() {
 add_action( 'wp_enqueue_scripts', 'sal_theme_enqueue_assets' );
 
 function sal_theme_enqueue_assets() {
-	// Etapa 3: tokens.css e base.css serão enfileirados aqui.
-	// Etapa 4: components.css e theme.js serão enfileirados aqui.
+	// ── Design system (Etapa 3) ──────────────────────────────────────────────
+	// tokens.css DEVE vir antes de base.css (custom properties usadas por base).
+	wp_enqueue_style(
+		'sal-tokens',
+		SAL_THEME_URI . '/assets/css/tokens.css',
+		[],
+		SAL_THEME_VERSION
+	);
+
+	wp_enqueue_style(
+		'sal-base',
+		SAL_THEME_URI . '/assets/css/base.css',
+		[ 'sal-tokens' ], // garante que tokens carregue primeiro
+		SAL_THEME_VERSION
+	);
+
+	// ── Componentes e JS (Etapa 4+) ─────────────────────────────────────────
+	// components.css e theme.js serão enfileirados aqui na Etapa 4.
 }

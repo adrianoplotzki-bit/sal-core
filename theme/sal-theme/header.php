@@ -4,6 +4,14 @@
 	<meta charset="<?php bloginfo( 'charset' ); ?>">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="profile" href="https://gmpg.org/xfn/11">
+
+	<!-- Google Fonts: preconnect para reduzir latência -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<!-- Inter (corpo + títulos): 400 Regular, 600 SemiBold, 800 ExtraBold -->
+	<!-- Bebas Neue (menus + destaques): 400 -->
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap">
+
 	<?php wp_head(); ?>
 </head>
 

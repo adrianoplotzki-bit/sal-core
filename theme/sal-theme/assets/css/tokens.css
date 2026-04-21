@@ -1,0 +1,72 @@
+/**
+ * SAL Theme — tokens.css
+ *
+ * Fonte da verdade para todos os valores visuais do tema.
+ * NENHUM valor de cor, fonte, espaçamento ou raio deve aparecer
+ * hard-coded em outros arquivos — sempre via var(--sal-*).
+ *
+ * @package sal-theme
+ */
+
+:root {
+  /* ─── Cores ────────────────────────────────────────────────────────────── */
+  --sal-red:          #dc2626;  /* red-600 — CTAs principais              */
+  --sal-red-dark:     #b91c1c;  /* hover do vermelho                      */
+  --sal-blue:         #1a5b8f;  /* botão newsletter                       */
+  --sal-blue-bg:      #e6eef5;  /* fundo card newsletter                  */
+  --sal-blue-accent:  #2563eb;  /* links, ícones "balanço"                */
+  --sal-blue-tint:    #dbeafe;  /* círculo do ícone balanço               */
+  --sal-green:        #059669;  /* ícone prestação de contas              */
+  --sal-green-tint:   #d1fae5;  /* círculo do ícone prestação             */
+  --sal-ink:          #111827;  /* títulos                                */
+  --sal-body:         #1f2937;  /* corpo de texto                         */
+  --sal-muted:        #6b7280;  /* textos auxiliares / metadados          */
+  --sal-bg:           #f9fafb;  /* fundo da página                        */
+  --sal-card:         #ffffff;  /* fundo de cards                         */
+  --sal-border:       #e5e7eb;  /* bordas suaves                          */
+
+  /* ─── Tipografia ───────────────────────────────────────────────────────── */
+  --sal-font-sans:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sal-font-display: "Bebas Neue", "Arial Black", Impact, sans-serif; /* menus e destaques */
+
+  --sal-weight-regular:  400;
+  --sal-weight-semibold: 600;
+  --sal-weight-black:    800;
+
+  /* ─── Escala tipográfica (mobile-first) ────────────────────────────────── */
+  --sal-fs-xs:   0.75rem;   /*  12px */
+  --sal-fs-sm:   0.875rem;  /*  14px */
+  --sal-fs-base: 1rem;      /*  16px */
+  --sal-fs-lg:   1.125rem;  /*  18px */
+  --sal-fs-xl:   1.25rem;   /*  20px */
+  --sal-fs-2xl:  1.5rem;    /*  24px */
+  --sal-fs-3xl:  1.875rem;  /*  30px */
+  --sal-fs-4xl:  2.25rem;   /*  36px */
+  --sal-fs-5xl:  3rem;      /*  48px */
+  --sal-fs-6xl:  3.75rem;   /*  60px */
+
+  /* ─── Espaçamento ──────────────────────────────────────────────────────── */
+  --sal-sp-1:  0.25rem;  /*  4px */
+  --sal-sp-2:  0.5rem;   /*  8px */
+  --sal-sp-3:  0.75rem;  /* 12px */
+  --sal-sp-4:  1rem;     /* 16px */
+  --sal-sp-6:  1.5rem;   /* 24px */
+  --sal-sp-8:  2rem;     /* 32px */
+  --sal-sp-12: 3rem;     /* 48px */
+  --sal-sp-16: 4rem;     /* 64px */
+
+  /* ─── Raios de borda ───────────────────────────────────────────────────── */
+  --sal-radius-sm: 0.375rem;  /*  6px */
+  --sal-radius:    0.5rem;    /*  8px */
+  --sal-radius-lg: 0.75rem;   /* 12px */
+  --sal-radius-xl: 1rem;      /* 16px */
+
+  /* ─── Sombras ──────────────────────────────────────────────────────────── */
+  --sal-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sal-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --sal-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.06);
+
+  /* ─── Layout ───────────────────────────────────────────────────────────── */
+  --sal-container: 80rem;  /* 1280px — largura máxima do conteúdo */
+  --sal-gutter:    1rem;   /* padding lateral do container        */
+}
