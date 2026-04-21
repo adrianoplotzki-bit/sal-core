@@ -1,0 +1,234 @@
+/**
+ * SAL Theme — components.css
+ *
+ * Estilos dos componentes visuais do tema, organizados por seção.
+ * Depende de tokens.css e base.css (devem ser carregados antes).
+ * Nenhum valor hard-coded: tudo via var(--sal-*).
+ *
+ * Seções:
+ *   1. Header
+ *   (próximas etapas adicionarão: Hero, Cards, Newsletter, Footer…)
+ *
+ * @package sal-theme
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Wrapper principal ────────────────────────────────────────────────────── */
+.sal-header {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	background-color: var(--sal-card);
+	border-bottom: 1px solid var(--sal-border);
+	box-shadow: var(--sal-shadow-sm);
+}
+
+/* ─── Linha interna (flex row) ─────────────────────────────────────────────── */
+.sal-header__inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sal-sp-4);
+	padding-block: var(--sal-sp-4);
+}
+
+/* ─── Logo ─────────────────────────────────────────────────────────────────── */
+.sal-logo {
+	font-family: var(--sal-font-display); /* Bebas Neue */
+	font-size: var(--sal-fs-4xl);         /* 36px — imponente mas não excessivo */
+	font-weight: var(--sal-weight-regular);
+	color: var(--sal-ink);
+	text-decoration: none;
+	letter-spacing: -0.01em;
+	line-height: 1;
+	flex-shrink: 0;
+	transition: color 0.15s ease;
+}
+
+.sal-logo:hover,
+.sal-logo:focus-visible {
+	color: var(--sal-red);
+	text-decoration: none;
+}
+
+/* ─── Nav — oculto em mobile, expandido via .is-open ou ≥768px ────────────── */
+.sal-nav {
+	display: none;
+}
+
+.sal-nav__list {
+	display: flex;
+	align-items: center;
+	gap: var(--sal-sp-8);
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+/* Links do menu */
+.sal-nav__list a {
+	font-size: var(--sal-fs-sm);
+	font-weight: var(--sal-weight-semibold);
+	color: var(--sal-body);
+	text-decoration: none;
+	padding-block: var(--sal-sp-1);
+	border-bottom: 2px solid transparent;
+	transition: color 0.15s ease, border-color 0.15s ease;
+	white-space: nowrap;
+}
+
+.sal-nav__list a:hover,
+.sal-nav__list a:focus-visible {
+	color: var(--sal-red);
+	border-bottom-color: var(--sal-red);
+}
+
+/* Item ativo (WP adiciona .current-menu-item / .current_page_item) */
+.sal-nav__list .current-menu-item > a,
+.sal-nav__list .current_page_item > a,
+.sal-nav__list .current-menu-ancestor > a {
+	color: var(--sal-red);
+	border-bottom-color: var(--sal-red);
+}
+
+/* ─── CTA "Apoiar o #SAL" ──────────────────────────────────────────────────── */
+/* Sempre visível — diferencia o header como área de ação, mesmo em mobile */
+.sal-header__cta {
+	font-size: var(--sal-fs-xs);    /* menor em mobile para caber na linha */
+	padding: var(--sal-sp-2) var(--sal-sp-3);
+	flex-shrink: 0;
+}
+
+/* ─── Botão hambúrguer ─────────────────────────────────────────────────────── */
+.sal-nav-toggle {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 5px;
+	width: 2.25rem;   /* 36px */
+	height: 2.25rem;
+	padding: 0.375rem;
+	background: transparent;
+	border: 1px solid var(--sal-border);
+	border-radius: var(--sal-radius-sm);
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.sal-nav-toggle:hover {
+	border-color: var(--sal-ink);
+	background-color: var(--sal-bg);
+}
+
+.sal-nav-toggle:focus-visible {
+	outline: 2px solid var(--sal-red);
+	outline-offset: 2px;
+}
+
+/* As três barras */
+.sal-nav-toggle__bar {
+	display: block;
+	width: 100%;
+	height: 2px;
+	background-color: var(--sal-ink);
+	border-radius: 2px;
+	transform-origin: center;
+	transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+/* Animação hambúrguer → X ao abrir */
+.is-open .sal-nav-toggle .sal-nav-toggle__bar:nth-child(1) {
+	transform: translateY(7px) rotate(45deg);
+}
+
+.is-open .sal-nav-toggle .sal-nav-toggle__bar:nth-child(2) {
+	opacity: 0;
+	transform: scaleX(0);
+}
+
+.is-open .sal-nav-toggle .sal-nav-toggle__bar:nth-child(3) {
+	transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ─── Menu mobile: dropdown ao abrir (.is-open no body) ───────────────────── */
+.is-open .sal-nav {
+	display: block;
+	position: absolute;
+	top: 100%;           /* imediatamente abaixo do header */
+	inset-inline: 0;
+	background-color: var(--sal-card);
+	border-top: 1px solid var(--sal-border);
+	box-shadow: var(--sal-shadow-lg);
+	padding: var(--sal-sp-4) var(--sal-sp-6) var(--sal-sp-6);
+	z-index: 49;
+}
+
+.is-open .sal-nav__list {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+}
+
+.is-open .sal-nav__list li {
+	border-bottom: 1px solid var(--sal-border);
+}
+
+.is-open .sal-nav__list li:last-child {
+	border-bottom: none;
+}
+
+.is-open .sal-nav__list a {
+	display: block;
+	padding: var(--sal-sp-4) 0;
+	font-size: var(--sal-fs-base);
+	border-bottom: none; /* a borda é no <li>, não no link */
+}
+
+/* ─── Desktop (≥ 768px) ────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+
+	/* Mostrar nav sempre */
+	.sal-nav {
+		display: block;
+	}
+
+	/* Ocultar hambúrguer */
+	.sal-nav-toggle {
+		display: none;
+	}
+
+	/* CTA com tamanho normal */
+	.sal-header__cta {
+		font-size: var(--sal-fs-sm);
+		padding: var(--sal-sp-3) var(--sal-sp-6);
+	}
+
+	/* Garantir que estilos do estado .is-open não vazem para desktop */
+	.is-open .sal-nav {
+		position: static;
+		box-shadow: none;
+		border-top: none;
+		padding: 0;
+		background: transparent;
+	}
+
+	.is-open .sal-nav__list {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--sal-sp-8);
+	}
+
+	.is-open .sal-nav__list li {
+		border-bottom: none;
+	}
+
+	.is-open .sal-nav__list a {
+		display: inline;
+		padding-block: var(--sal-sp-1);
+		font-size: var(--sal-fs-sm);
+	}
+}

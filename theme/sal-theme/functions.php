@@ -66,6 +66,24 @@ function sal_theme_enqueue_assets() {
 		SAL_THEME_VERSION
 	);
 
-	// ── Componentes e JS (Etapa 4+) ─────────────────────────────────────────
-	// components.css e theme.js serão enfileirados aqui na Etapa 4.
+	// ── Componentes visuais (Etapa 4) ───────────────────────────────────────
+	// components.css: header, hero, cards, newsletter, footer.
+	// Depende de sal-base (que por sua vez depende de sal-tokens).
+	wp_enqueue_style(
+		'sal-components',
+		SAL_THEME_URI . '/assets/css/components.css',
+		[ 'sal-base' ],
+		SAL_THEME_VERSION
+	);
+
+	// ── JavaScript do tema (Etapa 4) ─────────────────────────────────────────
+	// theme.js: toggle do menu mobile (IIFE, zero dependências).
+	// Carregado no rodapé (true) para não bloquear o render.
+	wp_enqueue_script(
+		'sal-theme',
+		SAL_THEME_URI . '/assets/js/theme.js',
+		[],              // zero dependências (vanilla JS puro)
+		SAL_THEME_VERSION,
+		true             // footer: true (carrega após o DOM)
+	);
 }
