@@ -8,6 +8,7 @@ on:
       - 'js/**'
       - 'css/**'
       - '.github/workflows/deploy.yml'
+      - 'theme/**'
   workflow_dispatch:
 
 jobs:
@@ -67,3 +68,51 @@ jobs:
             .git*
             .github/**
             **/.DS_Store
+
+  # ---------------------------------------------------------------------------
+  # Tema: deploy para staging (push em branch staging, arquivos theme/**)
+  # ---------------------------------------------------------------------------
+  deploy-theme-staging:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy theme to STAGING via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          protocol: ftp
+          local-dir: ./theme/sal-theme/
+          server-dir: ${{ secrets.REMOTE_DIR_THEMES_STAGING }}/sal-theme/
+          exclude: |
+            .git*
+            .github/**
+            **/.DS_Store
+            **/.gitkeep
+
+  # ---------------------------------------------------------------------------
+  # Tema: deploy para produção (manual via workflow_dispatch)
+  # ---------------------------------------------------------------------------
+  deploy-theme-production:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy theme to PROD via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          protocol: ftp
+          local-dir: ./theme/sal-theme/
+          server-dir: ${{ secrets.REMOTE_DIR_THEMES_PROD }}/sal-theme/
+          exclude: |
+            .git*
+            .github/**
+            **/.DS_Store
+            **/.gitkeep
