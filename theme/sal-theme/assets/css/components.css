@@ -910,3 +910,145 @@
 	color: var(--sal-ink);
 	text-decoration: underline;
 }
+
+/* ============================================================================
+   §10  PÁGINAS INTERNAS — .sal-page / .sal-prose
+   ============================================================================ */
+
+/* ─── Layout da página ─────────────────────────────────────────────────────── */
+.sal-page {
+	padding-block: var(--sal-sp-12);
+}
+
+.sal-page__header {
+	margin-bottom: var(--sal-sp-8);
+	border-bottom: 2px solid var(--sal-border);
+	padding-bottom: var(--sal-sp-6);
+}
+
+.sal-page__title {
+	font-family: var(--sal-font-sans);
+	font-size: var(--sal-fs-4xl);
+	font-weight: var(--sal-weight-black);
+	color: var(--sal-ink);
+	line-height: 1.2;
+	margin: 0;
+}
+
+@media (max-width: 768px) {
+	.sal-page__title {
+		font-size: var(--sal-fs-3xl);
+	}
+}
+
+/* ─── Tipografia de leitura — .sal-prose ──────────────────────────────────── */
+.sal-prose {
+	max-width: 70ch;
+}
+
+.sal-prose__body {
+	font-size: var(--sal-fs-base);
+	line-height: 1.7;
+	color: var(--sal-body);
+}
+
+/* Parágrafos */
+.sal-prose__body p {
+	margin-block-start: 0;
+	margin-block-end: var(--sal-sp-5);
+}
+
+.sal-prose__body p:last-child {
+	margin-block-end: 0;
+}
+
+/* Headings dentro do artigo */
+.sal-prose__body h2 {
+	font-family: var(--sal-font-sans);
+	font-size: var(--sal-fs-2xl);
+	font-weight: var(--sal-weight-black);
+	color: var(--sal-ink);
+	line-height: 1.3;
+	margin-block: var(--sal-sp-8) var(--sal-sp-3);
+}
+
+.sal-prose__body h3 {
+	font-family: var(--sal-font-sans);
+	font-size: var(--sal-fs-xl);
+	font-weight: var(--sal-weight-semibold);
+	color: var(--sal-ink);
+	line-height: 1.4;
+	margin-block: var(--sal-sp-6) var(--sal-sp-2);
+}
+
+/* Listas */
+.sal-prose__body ul,
+.sal-prose__body ol {
+	padding-inline-start: 1.5rem;
+	margin-block-end: var(--sal-sp-5);
+}
+
+.sal-prose__body ul {
+	list-style-type: disc;
+}
+
+.sal-prose__body ol {
+	list-style-type: decimal;
+}
+
+.sal-prose__body li {
+	margin-block-end: var(--sal-sp-2);
+	line-height: 1.65;
+}
+
+.sal-prose__body li:last-child {
+	margin-block-end: 0;
+}
+
+/* Links dentro do texto */
+.sal-prose__body a {
+	color: var(--sal-red);
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+	transition: color 0.15s ease;
+}
+
+.sal-prose__body a:hover,
+.sal-prose__body a:focus-visible {
+	color: var(--sal-red-dark);
+}
+
+/* Blockquote */
+.sal-prose__body blockquote {
+	margin-inline: 0;
+	margin-block: var(--sal-sp-6);
+	padding-inline-start: var(--sal-sp-5);
+	border-inline-start: 3px solid var(--sal-red);
+	font-style: italic;
+	color: var(--sal-muted);
+}
+
+/* Imagens inline */
+.sal-prose__body img {
+	max-width: 100%;
+	height: auto;
+	border-radius: var(--sal-radius-md);
+	margin-block: var(--sal-sp-4);
+}
+
+/* Código inline */
+.sal-prose__body code {
+	font-family: ui-monospace, "Fira Code", "Cascadia Code", monospace;
+	font-size: 0.875em;
+	background: var(--sal-blue-bg);
+	color: var(--sal-blue);
+	padding: 0.1em 0.35em;
+	border-radius: var(--sal-radius-sm);
+}
+
+/* Separador */
+.sal-prose__body hr {
+	border: none;
+	border-top: 1px solid var(--sal-border);
+	margin-block: var(--sal-sp-8);
+}
