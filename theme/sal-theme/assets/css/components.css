@@ -329,3 +329,238 @@
 		justify-content: center;
 	}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. HOME — GRID PRINCIPAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Seção wrapper (padding vertical da home) ─────────────────────────────── */
+.sal-home-section {
+	padding-block: var(--sal-sp-16);
+	background-color: var(--sal-bg);
+}
+
+/* ─── Título de seção reutilizável (h2 das seções da home) ────────────────── */
+.sal-section-title {
+	font-size: var(--sal-fs-3xl);
+	font-weight: var(--sal-weight-black);
+	color: var(--sal-ink);
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+	margin-bottom: var(--sal-sp-6);
+}
+
+/* ─── Grid 7fr / 5fr — desktop ────────────────────────────────────────────── */
+.sal-home-grid {
+	display: grid;
+	grid-template-columns: 7fr 5fr;
+	gap: var(--sal-sp-12); /* 3rem entre colunas */
+	align-items: start;
+}
+
+/* Colunas empilhadas em mobile */
+@media (max-width: 900px) {
+	.sal-home-grid {
+		grid-template-columns: 1fr;
+		gap: var(--sal-sp-12);
+	}
+}
+
+/* ─── Coluna esquerda: espaço interno entre seções ─────────────────────────── */
+.sal-home-grid__col--left,
+.sal-home-grid__col--right {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sal-sp-12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. ÚLTIMO VÍDEO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Card principal ───────────────────────────────────────────────────────── */
+.sal-latest-video__card {
+	display: block;
+	position: relative;
+	border-radius: var(--sal-radius-xl);
+	overflow: hidden;
+	box-shadow: var(--sal-shadow-lg);
+	text-decoration: none;
+	background-color: var(--sal-ink); /* fundo enquanto a imagem carrega */
+	aspect-ratio: 16 / 9;             /* mantém proporção mesmo sem imagem */
+}
+
+/* ─── Thumbnail ────────────────────────────────────────────────────────────── */
+.sal-latest-video__thumb {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	transition: transform 0.35s ease;
+}
+
+.sal-latest-video__card:hover .sal-latest-video__thumb,
+.sal-latest-video__card:focus-visible .sal-latest-video__thumb {
+	transform: scale(1.03);
+}
+
+/* ─── Overlay escuro sobre o thumbnail ────────────────────────────────────── */
+.sal-latest-video__overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.2s ease;
+}
+
+.sal-latest-video__card:hover .sal-latest-video__overlay,
+.sal-latest-video__card:focus-visible .sal-latest-video__overlay {
+	background: rgba(0, 0, 0, 0.35);
+}
+
+/* ─── Botão play ───────────────────────────────────────────────────────────── */
+.sal-latest-video__play {
+	width: 4rem;    /* 64px */
+	height: 4rem;
+	background: rgba(255, 255, 255, 0.92);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--sal-ink);
+	box-shadow: var(--sal-shadow-lg);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.sal-latest-video__card:hover .sal-latest-video__play,
+.sal-latest-video__card:focus-visible .sal-latest-video__play {
+	transform: scale(1.1);
+	background: #ffffff;
+}
+
+/* ─── Caption do título no rodapé do card ──────────────────────────────────── */
+.sal-latest-video__caption {
+	position: absolute;
+	bottom: 0;
+	inset-inline: 0;
+	padding: var(--sal-sp-3) var(--sal-sp-4);
+	background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 100%);
+	color: #ffffff;
+	font-size: var(--sal-fs-sm);
+	font-weight: var(--sal-weight-semibold);
+	line-height: 1.4;
+
+	/* Limita a 2 linhas com ellipsis */
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* ─── Focus visível acessível ──────────────────────────────────────────────── */
+.sal-latest-video__card:focus-visible {
+	outline: 3px solid var(--sal-red);
+	outline-offset: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. TRANSPARÊNCIA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Grid dos dois cards ──────────────────────────────────────────────────── */
+.sal-transparency__grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--sal-sp-6);
+}
+
+@media (max-width: 600px) {
+	.sal-transparency__grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ─── Card base ────────────────────────────────────────────────────────────── */
+.sal-trans-card {
+	background: var(--sal-card);
+	border: 1px solid var(--sal-border);
+	border-radius: var(--sal-radius-xl);
+	padding: var(--sal-sp-6);
+	box-shadow: var(--sal-shadow-sm);
+	display: flex;
+	flex-direction: column;
+	gap: var(--sal-sp-2);
+	transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.sal-trans-card:hover {
+	box-shadow: var(--sal-shadow);
+	transform: translateY(-2px);
+}
+
+/* ─── Ícone circular ───────────────────────────────────────────────────────── */
+.sal-trans-card__icon {
+	width: 3rem;   /* 48px */
+	height: 3rem;
+	border-radius: var(--sal-radius-lg);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: var(--sal-sp-2);
+	flex-shrink: 0;
+}
+
+/* Variante azul */
+.sal-trans-card--blue .sal-trans-card__icon {
+	background-color: var(--sal-blue-tint);
+	color: var(--sal-blue-accent);
+}
+
+/* Variante verde */
+.sal-trans-card--green .sal-trans-card__icon {
+	background-color: var(--sal-green-tint);
+	color: var(--sal-green);
+}
+
+/* ─── Título e descrição ───────────────────────────────────────────────────── */
+.sal-trans-card__title {
+	font-size: var(--sal-fs-xl);
+	font-weight: var(--sal-weight-black);
+	color: var(--sal-ink);
+	line-height: 1.25;
+	margin: 0;
+}
+
+.sal-trans-card__desc {
+	font-size: var(--sal-fs-sm);
+	color: var(--sal-muted);
+	line-height: 1.5;
+	flex: 1; /* empurra o link para o fundo */
+	margin: var(--sal-sp-1) 0 var(--sal-sp-3);
+}
+
+/* ─── Link de ação ─────────────────────────────────────────────────────────── */
+.sal-trans-card__link {
+	font-size: var(--sal-fs-sm);
+	font-weight: var(--sal-weight-semibold);
+	text-decoration: none;
+	align-self: flex-start;
+	transition: text-decoration 0.15s ease;
+}
+
+.sal-trans-card__link:hover,
+.sal-trans-card__link:focus-visible {
+	text-decoration: underline;
+}
+
+.sal-trans-card__link--blue {
+	color: var(--sal-blue-accent);
+}
+
+.sal-trans-card__link--green {
+	color: var(--sal-green);
+}

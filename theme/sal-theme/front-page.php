@@ -8,8 +8,8 @@
  *
  * Estrutura por etapa:
  *   Etapa 5:  Hero
- *   Etapa 6:  Grid .sal-home-grid col-esquerda (último vídeo + transparência)
- *   Etapa 7:  Grid .sal-home-grid col-direita  (sobre o SAL + comunidade + newsletter)
+ *   Etapa 6:  Grid .sal-home-grid — coluna esquerda (último vídeo + transparência)
+ *   Etapa 7:  Grid .sal-home-grid — coluna direita  (sobre o SAL + comunidade + newsletter)
  *
  * @package sal-theme
  */
@@ -19,30 +19,34 @@ get_header();
 
 <main id="sal-main" class="sal-main">
 
-	<?php
-	/* ── Hero ───────────────────────────────────────────────────────────── */
-	get_template_part( 'template-parts/home/hero' );
-	?>
+	<?php /* ── Hero ──────────────────────────────────────────────────────── */ ?>
+	<?php get_template_part( 'template-parts/home/hero' ); ?>
 
-	<?php
-	/*
-	 * ── Grid da home (Etapas 6 e 7) ─────────────────────────────────────
-	 *
-	 * As duas colunas serão adicionadas aqui nas próximas etapas.
-	 * A estrutura esperada é:
-	 *
-	 *   <div class="sal-container">
-	 *     <div class="sal-home-grid">
-	 *       <div class="sal-home-grid__col--left">
-	 *         latest-video + transparency
-	 *       </div>
-	 *       <div class="sal-home-grid__col--right">
-	 *         about-sal + community + newsletter
-	 *       </div>
-	 *     </div>
-	 *   </div>
-	 */
-	?>
+	<?php /* ── Grid principal da home ─────────────────────────────────────── */ ?>
+	<section class="sal-home-section">
+		<div class="sal-container">
+			<div class="sal-home-grid">
+
+				<?php /* ── Coluna esquerda (7fr) — vídeo + transparência ── */ ?>
+				<div class="sal-home-grid__col--left">
+					<?php get_template_part( 'template-parts/home/latest-video' ); ?>
+					<?php get_template_part( 'template-parts/home/transparency' ); ?>
+				</div><!-- .sal-home-grid__col--left -->
+
+				<?php
+				/*
+				 * ── Coluna direita (5fr) — Etapa 7 ──────────────────────
+				 *
+				 * about-sal + community + newsletter serão adicionados aqui.
+				 */
+				?>
+				<div class="sal-home-grid__col--right">
+					<!-- Conteúdo da coluna direita será adicionado na Etapa 7 -->
+				</div><!-- .sal-home-grid__col--right -->
+
+			</div><!-- .sal-home-grid -->
+		</div><!-- .sal-container -->
+	</section><!-- .sal-home-section -->
 
 </main><!-- #sal-main -->
 
