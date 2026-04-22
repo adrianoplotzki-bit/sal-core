@@ -627,7 +627,7 @@
 	width: 100%;
 	height: 12rem;   /* 192px — h-48 do protótipo */
 	object-fit: cover;
-	object-position: center top;
+	object-position: right center; /* rosto está no lado direito da foto */
 	display: block;
 	margin-top: var(--sal-sp-4);
 }
