@@ -25,7 +25,7 @@
 		<p class="sal-footer__domain">hashtagsal.com.br</p>
 		<p class="sal-footer__mission">
 			<?php esc_html_e(
-				'Jornalismo independente, transparente e feito com a comunidade.',
+				'Por um ponto de vista diferente, um alongamento com o pensamento para imaginar o quanto diferente a vida poderia ser.',
 				'sal-theme'
 			); ?>
 		</p>
