@@ -38,11 +38,11 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 	<div class="sal-container sal-hero__content">
 
 		<h1 class="sal-hero__title">
-			<?php esc_html_e( 'Jornalismo independente, transparente e comunitário.', 'sal-theme' ); ?>
+			<?php esc_html_e( 'A vida de quem escolheu o oceâno como lar', 'sal-theme' ); ?>
 		</h1>
 
 		<p class="sal-hero__subtitle">
-			<?php esc_html_e( 'Reportagens que prestam contas e convidam você a participar.', 'sal-theme' ); ?>
+			<?php esc_html_e( 'Videos no YouTube que mostram a costa brasileira e nos fazem repensar o jeito que vivemos.', 'sal-theme' ); ?>
 		</p>
 
 		<div class="sal-hero__actions">
@@ -58,16 +58,16 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 			<!-- Botão secundário: transparência (ghost branco com ícone de gráfico) -->
 			<a class="sal-btn sal-btn--ghost"
 			   href="<?php echo esc_url( $balanco_url ); ?>">
-				<!-- Ícone mini-gráfico de barras (SVG inline, acessível via aria-hidden) -->
+				<!-- Ícone âncora / localização (onde está o Balanço) -->
 				<svg aria-hidden="true" focusable="false"
 				     width="20" height="20" viewBox="0 0 24 24"
 				     fill="none" stroke="currentColor"
 				     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
-					<path d="M15 19V9a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v10"/>
-					<path d="M21 19V5a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
+					<circle cx="12" cy="5" r="3"/>
+					<line x1="12" y1="8" x2="12" y2="21"/>
+					<path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
 				</svg>
-				<?php esc_html_e( 'Transparência em tempo real', 'sal-theme' ); ?>
+				<?php esc_html_e( 'Descubra onde está o Balanço', 'sal-theme' ); ?>
 			</a>
 
 		</div><!-- .sal-hero__actions -->

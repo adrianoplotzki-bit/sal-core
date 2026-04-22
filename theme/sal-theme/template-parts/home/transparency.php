@@ -18,7 +18,7 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 <section class="sal-transparency">
 
 	<h2 class="sal-section-title">
-		<?php esc_html_e( 'Transparência', 'sal-theme' ); ?>
+		<?php esc_html_e( 'Acompanhe', 'sal-theme' ); ?>
 	</h2>
 
 	<div class="sal-transparency__grid">
@@ -42,44 +42,42 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 			</h3>
 
 			<p class="sal-trans-card__desc">
-				<?php esc_html_e( 'Veja detalhadamente a nossa saúde financeira.', 'sal-theme' ); ?>
+				<?php esc_html_e( 'Saúde financeira do canal, receitas e despesas abertas.', 'sal-theme' ); ?>
 			</p>
 
 			<a class="sal-trans-card__link sal-trans-card__link--blue"
 			   href="<?php echo $balanco_url; ?>">
-				<?php esc_html_e( 'Ver números', 'sal-theme' ); ?> &rarr;
+				<?php esc_html_e( 'Acompanhar', 'sal-theme' ); ?> &rarr;
 			</a>
 
 		</article>
 
-		<!-- Card B: Prestação de Contas (verde) -->
+		<!-- Card B: Descubra onde está o Balanço (verde) -->
 		<article class="sal-trans-card sal-trans-card--green">
 
 			<div class="sal-trans-card__icon" aria-hidden="true">
-				<!-- Ícone: documento / lista -->
+				<!-- Ícone: âncora / localização do veleiro -->
 				<svg width="24" height="24" viewBox="0 0 24 24"
 				     fill="none" stroke="currentColor"
 				     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 				     aria-hidden="true" focusable="false">
-					<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-					<polyline points="14 2 14 8 20 8"/>
-					<line x1="9" y1="13" x2="15" y2="13"/>
-					<line x1="9" y1="17" x2="15" y2="17"/>
-					<polyline points="9 9 10 9 11 9"/>
+					<circle cx="12" cy="5" r="3"/>
+					<line x1="12" y1="8" x2="12" y2="21"/>
+					<path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
 				</svg>
 			</div>
 
 			<h3 class="sal-trans-card__title">
-				<?php esc_html_e( 'Prestação de Contas', 'sal-theme' ); ?>
+				<?php esc_html_e( 'Descubra onde está o Balanço', 'sal-theme' ); ?>
 			</h3>
 
 			<p class="sal-trans-card__desc">
-				<?php esc_html_e( 'Entenda nossas metas e estratégias editoriais.', 'sal-theme' ); ?>
+				<?php esc_html_e( 'Veja a posição e rota do veleiro em tempo real.', 'sal-theme' ); ?>
 			</p>
 
 			<a class="sal-trans-card__link sal-trans-card__link--green"
 			   href="<?php echo $balanco_url; ?>">
-				<?php esc_html_e( 'Entenda a meta', 'sal-theme' ); ?> &rarr;
+				<?php esc_html_e( 'Ver no mapa', 'sal-theme' ); ?> &rarr;
 			</a>
 
 		</article>
