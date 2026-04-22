@@ -21,7 +21,7 @@ $img_dir = get_template_directory_uri() . '/assets/img/community/';
 $quote = get_theme_mod(
 	'sal_community_quote',
 	/* translators: quote padrão da seção Da comunidade */
-	__( '"Jornalismo de verdade, feito por quem ama o que faz."', 'sal-theme' )
+	__( '"Por um ponto de vista diferente, um alongamento com o pensamento para imaginar o quanto diferente a vida poderia ser."', 'sal-theme' )
 );
 ?>
 
