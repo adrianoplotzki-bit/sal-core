@@ -36,6 +36,29 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: Debug SSH connectivity (TEMP)
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+        run: |
+          echo "--- key file ---"
+          ls -la ~/.ssh/
+          echo "--- key first/last line + line count ---"
+          head -1 ~/.ssh/deploy_key
+          tail -1 ~/.ssh/deploy_key
+          wc -l ~/.ssh/deploy_key
+          echo "--- known_hosts ---"
+          wc -l ~/.ssh/known_hosts
+          echo "--- ssh test (single attempt, no password fallback, 15s timeout) ---"
+          ssh -vvv \
+            -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o NumberOfPasswordPrompts=0 \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            "${SFTP_USER}@${SFTP_HOST}" \
+            "echo SUCCESS_FROM_RUNNER"
+
       - name: Deploy plugin to STAGING via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
@@ -45,8 +68,8 @@ jobs:
           sudo apt-get install -y lftp
           lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
-          set net:max-retries 3
-          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          set net:max-retries 1
+          set sftp:connect-program "ssh -a -x -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new -i $HOME/.ssh/deploy_key"
           open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
             --exclude-glob .git \
