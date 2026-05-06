@@ -18,14 +18,17 @@ on:
 # Importante: lftp não passa o user do "open sftp://user@host" para o
 # connect-program. Por isso precisa "-l $SFTP_USER" explícito na string do
 # sftp:connect-program — senão ssh usa o user local do runner ("runner").
+#
+# Sem staging real: push em "staging" e workflow_dispatch executam o mesmo
+# job, deployando no mesmo path. Os sufixos -staging/-production foram
+# removidos em 2026-05-06.
 # -----------------------------------------------------------------------------
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Plugin: deploy para staging (push em branch staging)
+  # Plugin: deploy automático em push, manual em workflow_dispatch
   # ---------------------------------------------------------------------------
-  deploy-staging:
-    if: github.ref == 'refs/heads/staging'
+  deploy-plugin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,16 +43,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy plugin to STAGING via SFTP
+      - name: Deploy plugin via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR_STAGING }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR_PLUGIN }}
         run: |
           sudo apt-get install -y lftp
           lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
-          set net:max-retries 1
+          set net:max-retries 3
           set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
           open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
@@ -65,12 +68,12 @@ jobs:
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR_STAGING }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR_PLUGIN }}
         run: |
           echo "deployed $(date -u)" > sal-deploy.flag
           lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
-          set net:max-retries 1
+          set net:max-retries 3
           set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
           open sftp://$SFTP_USER@$SFTP_HOST
           put sal-deploy.flag -o $REMOTE_DIR/sal-deploy.flag
@@ -78,10 +81,9 @@ jobs:
           LFTP_CMDS
 
   # ---------------------------------------------------------------------------
-  # Plugin: deploy para produção (manual via workflow_dispatch)
+  # Tema: deploy automático em push, manual em workflow_dispatch
   # ---------------------------------------------------------------------------
-  deploy-production:
-    if: github.event_name == 'workflow_dispatch'
+  deploy-theme:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,97 +98,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy plugin to PROD via SFTP
+      - name: Deploy theme via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR_PROD }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR_THEME }}
         run: |
           sudo apt-get install -y lftp
           lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
-          set net:max-retries 1
-          set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
-          open sftp://$SFTP_USER@$SFTP_HOST
-          mirror --reverse --delete --verbose \
-            --exclude-glob .git \
-            --exclude-glob .gitignore \
-            --exclude-glob .github \
-            --exclude-glob .DS_Store \
-            ./ $REMOTE_DIR/
-          bye
-          LFTP_CMDS
-
-  # ---------------------------------------------------------------------------
-  # Tema: deploy para staging (push em branch staging)
-  # ---------------------------------------------------------------------------
-  deploy-theme-staging:
-    if: github.ref == 'refs/heads/staging'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup SSH key
-        env:
-          SFTP_KEY: ${{ secrets.SFTP_KEY }}
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Deploy theme to STAGING via SFTP
-        env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USER: ${{ secrets.SFTP_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR_THEMES_STAGING }}
-        run: |
-          sudo apt-get install -y lftp
-          lftp <<LFTP_CMDS
-          set sftp:auto-confirm yes
-          set net:max-retries 1
-          set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
-          open sftp://$SFTP_USER@$SFTP_HOST
-          mirror --reverse --delete --verbose \
-            --exclude-glob .git \
-            --exclude-glob .gitignore \
-            --exclude-glob .github \
-            --exclude-glob .DS_Store \
-            --exclude-glob .gitkeep \
-            ./theme/sal-theme/ $REMOTE_DIR/sal-theme/
-          bye
-          LFTP_CMDS
-
-  # ---------------------------------------------------------------------------
-  # Tema: deploy para produção (manual via workflow_dispatch)
-  # ---------------------------------------------------------------------------
-  deploy-theme-production:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup SSH key
-        env:
-          SFTP_KEY: ${{ secrets.SFTP_KEY }}
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Deploy theme to PROD via SFTP
-        env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USER: ${{ secrets.SFTP_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR_THEMES_PROD }}
-        run: |
-          sudo apt-get install -y lftp
-          lftp <<LFTP_CMDS
-          set sftp:auto-confirm yes
-          set net:max-retries 1
+          set net:max-retries 3
           set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
           open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
