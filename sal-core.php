@@ -447,7 +447,7 @@ function sal_core_youtube_shortcode( $atts ) {
     echo '<div class="sal-youtube-grid">';
     foreach ( $videos as $v ) {
         $id = esc_attr( $v['id'] );
-        echo '<div class="sal-video"><iframe loading="lazy" src="https://www.youtube.com/embed/' . $id . '" title="YouTube video" frameborder="0" allowfullscreen></iframe></div>';
+        echo '<div class="sal-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/' . $id . '" title="YouTube video" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>';
     }
     echo '</div>';
     return ob_get_clean();
