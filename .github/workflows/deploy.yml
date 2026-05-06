@@ -11,6 +11,11 @@ on:
       - 'theme/**'
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# Auth: SSH key (SFTP_KEY) ao invés de senha. Servidor Hetzner roda com
+# PasswordAuthentication=no, então só funciona via chave.
+# -----------------------------------------------------------------------------
+
 jobs:
   # ---------------------------------------------------------------------------
   # Plugin: deploy para staging (push em branch staging)
@@ -21,17 +26,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        env:
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy plugin to STAGING via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_STAGING }}
         run: |
           sudo apt-get install -y lftp
-          lftp -u "$SFTP_USER","$SFTP_PASS" "sftp://$SFTP_HOST" <<LFTP_CMDS
+          lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
           set net:max-retries 3
+          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
             --exclude-glob .git \
             --exclude-glob .gitignore \
@@ -45,12 +61,13 @@ jobs:
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_STAGING }}
         run: |
           echo "deployed $(date -u)" > sal-deploy.flag
-          lftp -u "$SFTP_USER","$SFTP_PASS" "sftp://$SFTP_HOST" <<LFTP_CMDS
+          lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
+          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          open sftp://$SFTP_USER@$SFTP_HOST
           put sal-deploy.flag -o $REMOTE_DIR/sal-deploy.flag
           bye
           LFTP_CMDS
@@ -64,17 +81,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        env:
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy plugin to PROD via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_PROD }}
         run: |
           sudo apt-get install -y lftp
-          lftp -u "$SFTP_USER","$SFTP_PASS" "sftp://$SFTP_HOST" <<LFTP_CMDS
+          lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
           set net:max-retries 3
+          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
             --exclude-glob .git \
             --exclude-glob .gitignore \
@@ -93,17 +121,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        env:
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy theme to STAGING via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_THEMES_STAGING }}
         run: |
           sudo apt-get install -y lftp
-          lftp -u "$SFTP_USER","$SFTP_PASS" "sftp://$SFTP_HOST" <<LFTP_CMDS
+          lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
           set net:max-retries 3
+          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
             --exclude-glob .git \
             --exclude-glob .gitignore \
@@ -123,17 +162,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        env:
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy theme to PROD via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_THEMES_PROD }}
         run: |
           sudo apt-get install -y lftp
-          lftp -u "$SFTP_USER","$SFTP_PASS" "sftp://$SFTP_HOST" <<LFTP_CMDS
+          lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
           set net:max-retries 3
+          set sftp:connect-program "ssh -a -x -i $HOME/.ssh/deploy_key"
+          open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
             --exclude-glob .git \
             --exclude-glob .gitignore \
@@ -143,4 +193,3 @@ jobs:
             ./theme/sal-theme/ $REMOTE_DIR/sal-theme/
           bye
           LFTP_CMDS
-
