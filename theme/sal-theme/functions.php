@@ -108,12 +108,43 @@ function sal_theme_get_latest_video() {
 		return $cached;
 	}
 
-	$api_key    = trim( (string) get_option( 'sal_core_youtube_api_key', '' ) );
-	$channel_id = trim( (string) get_option( 'sal_core_youtube_channel_id', '' ) );
-	$video      = [];
+	$api_key     = trim( (string) get_option( 'sal_core_youtube_api_key', '' ) );
+	$channel_id  = trim( (string) get_option( 'sal_core_youtube_channel_id', '' ) );
+	$playlist_id = trim( (string) get_option( 'sal_core_youtube_playlist_id', '' ) );
+	$video       = [];
 
 	// ── Tenta YouTube Data API v3 ─────────────────────────────────────────
-	if ( $api_key && $channel_id ) {
+	// Preferência: playlist quando configurada; senão canal inteiro.
+	if ( $api_key && $playlist_id ) {
+		// Pega até 50 itens e ordena por contentDetails.videoPublishedAt desc
+		// pra retornar o vídeo de upload mais recente que está na playlist,
+		// independente da ordem manual da playlist no YouTube.
+		$url = add_query_arg( [
+			'part'       => 'snippet,contentDetails',
+			'playlistId' => $playlist_id,
+			'maxResults' => 50,
+			'key'        => $api_key,
+		], 'https://www.googleapis.com/youtube/v3/playlistItems' );
+
+		$response = wp_remote_get( $url, [ 'timeout' => 8 ] );
+
+		if ( ! is_wp_error( $response )
+			&& 200 === wp_remote_retrieve_response_code( $response ) ) {
+			$data  = json_decode( wp_remote_retrieve_body( $response ), true );
+			$items = isset( $data['items'] ) && is_array( $data['items'] ) ? $data['items'] : [];
+			usort( $items, function ( $a, $b ) {
+				$da = $a['contentDetails']['videoPublishedAt'] ?? $a['snippet']['publishedAt'] ?? '';
+				$db = $b['contentDetails']['videoPublishedAt'] ?? $b['snippet']['publishedAt'] ?? '';
+				return strcmp( $db, $da );
+			} );
+			if ( ! empty( $items[0]['snippet']['resourceId']['videoId'] ) ) {
+				$video = [
+					'id'    => $items[0]['snippet']['resourceId']['videoId'],
+					'title' => $items[0]['snippet']['title'] ?? '',
+				];
+			}
+		}
+	} elseif ( $api_key && $channel_id ) {
 		$url = add_query_arg( [
 			'part'       => 'snippet',
 			'channelId'  => $channel_id,
@@ -137,12 +168,16 @@ function sal_theme_get_latest_video() {
 		}
 	}
 
-	// ── Fallback: RSS público do canal ────────────────────────────────────
+	// ── Fallback: RSS público (playlist se configurada, senão canal) ─────
 	if ( empty( $video ) ) {
-		// Canal padrão do #SAL caso a option ainda não esteja preenchida.
-		$channel  = $channel_id ?: 'UCZ9bK5YKp6-sRPY1lgdPb5w';
-		$feed_url = 'https://www.youtube.com/feeds/videos.xml?channel_id='
-		            . urlencode( $channel );
+		if ( $playlist_id ) {
+			$feed_url = 'https://www.youtube.com/feeds/videos.xml?playlist_id='
+			            . urlencode( $playlist_id );
+		} else {
+			$channel  = $channel_id ?: 'UCZ9bK5YKp6-sRPY1lgdPb5w';
+			$feed_url = 'https://www.youtube.com/feeds/videos.xml?channel_id='
+			            . urlencode( $channel );
+		}
 
 		$response = wp_remote_get( $feed_url, [ 'timeout' => 8 ] );
 

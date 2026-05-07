@@ -232,6 +232,7 @@ add_action( 'wp_enqueue_scripts', 'sal_core_enqueue_assets' );
 function sal_core_register_settings() {
     register_setting( 'sal_core_settings', 'sal_core_youtube_api_key' );
     register_setting( 'sal_core_settings', 'sal_core_youtube_channel_id' );
+    register_setting( 'sal_core_settings', 'sal_core_youtube_playlist_id' );
     register_setting( 'sal_core_settings', 'sal_core_instagram_posts' );
     register_setting( 'sal_core_settings', 'sal_core_mailchimp_action' );
     register_setting( 'sal_core_settings', 'sal_core_apoia_campaign' );
@@ -298,6 +299,13 @@ function sal_core_render_settings_page() {
                 <tr>
                     <th scope="row"><label for="sal_core_youtube_channel_id">Channel ID</label></th>
                     <td><input type="text" id="sal_core_youtube_channel_id" name="sal_core_youtube_channel_id" value="<?php echo esc_attr( get_option( 'sal_core_youtube_channel_id' ) ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="sal_core_youtube_playlist_id">Playlist ID (opcional)</label></th>
+                    <td>
+                        <input type="text" id="sal_core_youtube_playlist_id" name="sal_core_youtube_playlist_id" value="<?php echo esc_attr( get_option( 'sal_core_youtube_playlist_id' ) ); ?>" class="regular-text" />
+                        <p class="description">Se preenchido, <code>[sal_youtube]</code> e o card de último vídeo na home buscam dessa playlist em vez do canal inteiro. ID está na URL: <code>youtube.com/playlist?list=<strong>ID</strong></code>.</p>
+                    </td>
                 </tr>
             </table>
             <h2>Instagram</h2>
@@ -387,10 +395,45 @@ add_shortcode( 'sal_balance', 'sal_core_balance_shortcode' );
 function sal_core_youtube_shortcode( $atts ) {
     $args = shortcode_atts( array( 'count' => 6 ), $atts );
     $count = max( 1, intval( $args['count'] ) );
-    $api_key    = trim( get_option( 'sal_core_youtube_api_key' ) );
-    $channel_id = trim( get_option( 'sal_core_youtube_channel_id' ) );
+    $api_key     = trim( get_option( 'sal_core_youtube_api_key' ) );
+    $channel_id  = trim( get_option( 'sal_core_youtube_channel_id' ) );
+    $playlist_id = trim( get_option( 'sal_core_youtube_playlist_id' ) );
     $videos = array();
-    if ( $api_key && $channel_id ) {
+
+    // Preferência: playlist quando configurada (filtra a curadoria);
+    // senão busca por canal inteiro (comportamento original).
+    if ( $api_key && $playlist_id ) {
+        // playlistItems não suporta order=date; pegamos até 50 e ordenamos
+        // server-side por contentDetails.videoPublishedAt (data real do
+        // upload, não data de adição à playlist).
+        $url = add_query_arg( array(
+            'part'       => 'snippet,contentDetails',
+            'playlistId' => $playlist_id,
+            'maxResults' => 50,
+            'key'        => $api_key,
+        ), 'https://www.googleapis.com/youtube/v3/playlistItems' );
+        $response = wp_remote_get( $url, array( 'timeout' => 10 ) );
+        if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
+            $data  = json_decode( wp_remote_retrieve_body( $response ), true );
+            $items = isset( $data['items'] ) && is_array( $data['items'] ) ? $data['items'] : array();
+            usort( $items, function( $a, $b ) {
+                $da = $a['contentDetails']['videoPublishedAt'] ?? $a['snippet']['publishedAt'] ?? '';
+                $db = $b['contentDetails']['videoPublishedAt'] ?? $b['snippet']['publishedAt'] ?? '';
+                return strcmp( $db, $da );
+            } );
+            foreach ( $items as $item ) {
+                if ( isset( $item['snippet']['resourceId']['videoId'] ) ) {
+                    $videos[] = array(
+                        'id'    => $item['snippet']['resourceId']['videoId'],
+                        'title' => $item['snippet']['title'] ?? '',
+                    );
+                    if ( count( $videos ) >= $count ) {
+                        break;
+                    }
+                }
+            }
+        }
+    } elseif ( $api_key && $channel_id ) {
         $url = add_query_arg( array(
             'part'       => 'snippet',
             'channelId'  => $channel_id,
@@ -420,10 +463,15 @@ function sal_core_youtube_shortcode( $atts ) {
             }
         }
     }
-    // Fallback via RSS se API indisponível ou sem chave
+    // Fallback via RSS se API indisponível ou sem chave.
+    // YouTube serve feed por playlist em ?playlist_id=... (ordem da playlist).
     if ( ! $videos ) {
-        $channel = $channel_id ?: 'UCZ9bK5YKp6-sRPY1lgdPb5w';
-        $feed_url = 'https://www.youtube.com/feeds/videos.xml?channel_id=' . urlencode( $channel );
+        if ( $playlist_id ) {
+            $feed_url = 'https://www.youtube.com/feeds/videos.xml?playlist_id=' . urlencode( $playlist_id );
+        } else {
+            $channel = $channel_id ?: 'UCZ9bK5YKp6-sRPY1lgdPb5w';
+            $feed_url = 'https://www.youtube.com/feeds/videos.xml?channel_id=' . urlencode( $channel );
+        }
         $response = wp_remote_get( $feed_url, array( 'timeout' => 10 ) );
         if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
             $xml = simplexml_load_string( wp_remote_retrieve_body( $response ) );
