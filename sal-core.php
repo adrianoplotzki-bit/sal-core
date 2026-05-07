@@ -722,27 +722,4 @@ function sal_core_do_setup() {
 }
 add_action( 'admin_post_sal_core_do_setup', 'sal_core_do_setup' );
 
-/**
- * Opção de redirecionamento temporário: se definido, permite redirecionar
- * automaticamente visitantes da raiz para uma subpasta (por exemplo, /teste).
- * Só é aplicado a visitantes não autenticados e não interfere no admin.
- */
-function sal_core_temp_redirect() {
-    if ( is_admin() || is_user_logged_in() ) {
-        return;
-    }
-    $uri  = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
-    $path = trim( parse_url( $uri, PHP_URL_PATH ), '/' );
-    if ( '' === $path ) {
-        $dest = defined( 'SAL_CORE_REDIRECT_PATH' ) ? SAL_CORE_REDIRECT_PATH : '/teste';
-        $dest = '/' . ltrim( trim( $dest ), '/' );
-        if ( '/' === $dest || $path === trim( $dest, '/' ) ) {
-            return;
-        }
-        wp_redirect( home_url( $dest ), 302 );
-        exit;
-    }
-}
-add_action( 'template_redirect', 'sal_core_temp_redirect', 1 );
-
 // Fim do arquivo
