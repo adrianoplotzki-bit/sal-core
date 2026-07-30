@@ -2,12 +2,16 @@
 /**
  * Template part: home/transparency.php
  *
- * Seção de transparência com dois cards:
- *   A) Acompanhe o Balanço  (azul) → /balanco
- *   B) Prestação de Contas  (verde) → /balanco (nesta fase; futuro: /prestacao-de-contas)
+ * Card único: "Descubra onde está o Balanço" (verde) → /balanco.
+ * "Balanço" aqui é o NOME DO VELEIRO — o card é rastreamento de posição,
+ * não financeiro.
+ *
+ * O card azul "Acompanhe o Balanço" ("receitas e despesas abertas") foi
+ * REMOVIDO em 2026-07-30: o canal não abre dados de despesas e não pretende
+ * abrir. **Não readicionar.** Ver CLAUDE.md §5.
  *
  * Ícones SVG inline para evitar dependência de sprite ou icon font.
- * Cores via tokens: --sal-blue-tint / --sal-blue-accent / --sal-green-tint / --sal-green.
+ * Cores via tokens: --sal-green-tint / --sal-green.
  *
  * @package sal-theme
  */
@@ -23,36 +27,7 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 
 	<div class="sal-transparency__grid">
 
-		<!-- Card A: Acompanhe o Balanço (azul) -->
-		<article class="sal-trans-card sal-trans-card--blue">
-
-			<div class="sal-trans-card__icon" aria-hidden="true">
-				<!-- Ícone: moeda / círculo monetário -->
-				<svg width="24" height="24" viewBox="0 0 24 24"
-				     fill="none" stroke="currentColor"
-				     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-				     aria-hidden="true" focusable="false">
-					<circle cx="12" cy="12" r="10"/>
-					<path d="M12 6v2m0 8v2M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5M12 15.5h.01"/>
-				</svg>
-			</div>
-
-			<h3 class="sal-trans-card__title">
-				<?php esc_html_e( 'Acompanhe o Balanço', 'sal-theme' ); ?>
-			</h3>
-
-			<p class="sal-trans-card__desc">
-				<?php esc_html_e( 'Saúde financeira do canal, receitas e despesas abertas.', 'sal-theme' ); ?>
-			</p>
-
-			<a class="sal-trans-card__link sal-trans-card__link--blue"
-			   href="<?php echo $balanco_url; ?>">
-				<?php esc_html_e( 'Acompanhar', 'sal-theme' ); ?> &rarr;
-			</a>
-
-		</article>
-
-		<!-- Card B: Descubra onde está o Balanço (verde) -->
+		<!-- Card: Descubra onde está o Balanço (verde) -->
 		<article class="sal-trans-card sal-trans-card--green">
 
 			<div class="sal-trans-card__icon" aria-hidden="true">
