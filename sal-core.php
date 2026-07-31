@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.9
+ * Version:     0.10
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,10 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.9' );
+define( 'SAL_CORE_VERSION', '0.10' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
-define( 'SAL_CORE_DB_VERSION', '3' );
+define( 'SAL_CORE_DB_VERSION', '4' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -45,6 +45,8 @@ function sal_core_activate() {
         cog FLOAT NULL,
         awa FLOAT NULL,
         aws FLOAT NULL,
+        aws_min FLOAT NULL,
+        aws_max FLOAT NULL,
         waterspeed FLOAT NULL,
         heading FLOAT NULL,
         batt FLOAT NULL,
@@ -197,7 +199,9 @@ function sal_core_valida_ponto( $data ) {
         'sog'        => array( 0,      100 ),   // nós
         'cog'        => array( 0,      360 ),   // graus
         'awa'        => array( -180,   180 ),   // graus
-        'aws'        => array( 0,      200 ),   // nós
+        'aws'        => array( 0,      200 ),   // nós (média do intervalo)
+        'aws_min'    => array( 0,      200 ),
+        'aws_max'    => array( 0,      200 ),
         'waterspeed' => array( 0,      100 ),
         'heading'    => array( 0,      360 ),
         'batt'       => array( 0,      200 ),   // volts (margem ampla)
@@ -234,6 +238,8 @@ function sal_core_valida_ponto( $data ) {
         'cog'        => $clean['cog'],
         'awa'        => $clean['awa'],
         'aws'        => $clean['aws'],
+        'aws_min'    => $clean['aws_min'],
+        'aws_max'    => $clean['aws_max'],
         'waterspeed' => $clean['waterspeed'],
         'heading'    => $clean['heading'],
         'batt'       => $clean['batt'],
@@ -701,7 +707,11 @@ function sal_core_metricas() {
     return array(
         'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false ),
         'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false ),
-        'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento',        'unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false ),
+        // A faixa min..max transforma "12 nós" em "12 nós, variando de 8 a 19".
+        // Num canal de vela a rajada é metade da história; média sozinha a
+        // apaga, e é justamente o pico que decide se o dia foi duro.
+        'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento',        'unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false,
+                                   'col_min' => 'aws_min', 'col_max' => 'aws_max' ),
         'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',         'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
         'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
     );
@@ -795,6 +805,14 @@ function sal_core_get_series( WP_REST_Request $request ) {
     $selects  = array( "FLOOR({$epoca}/{$bloco})*{$bloco} AS bloco" );
     foreach ( $metricas as $chave => $m ) {
         $selects[] = "AVG({$m['col']}) AS " . $chave;
+        // A composição fecha: cada linha já traz média/mín/máx do seu próprio
+        // intervalo, então o bloco é a média das médias e o extremo dos
+        // extremos. Tirar MIN da coluna da média daria uma faixa estreita
+        // demais — o pico de um intervalo curto sumiria na média dele.
+        if ( ! empty( $m['col_min'] ) ) {
+            $selects[] = "MIN({$m['col_min']}) AS {$chave}__min";
+            $selects[] = "MAX({$m['col_max']}) AS {$chave}__max";
+        }
     }
 
     $linhas = $wpdb->get_results(
@@ -808,27 +826,50 @@ function sal_core_get_series( WP_REST_Request $request ) {
     $series = array();
     foreach ( $metricas as $chave => $m ) {
         $pontos = array();
-        $tem    = false;
+        $faixa  = array();
+        $tem      = false;
+        $tem_faixa = false;
+
         foreach ( $linhas as $linha ) {
-            $v = $linha[ $chave ];
-            if ( $m['bolha'] && $corte_unix !== null && (int) $linha['bloco'] > $corte_unix ) {
-                $v = null;
-            }
+            $bloco_ts = (int) $linha['bloco'];
+            $oculto   = $m['bolha'] && $corte_unix !== null && $bloco_ts > $corte_unix;
+
+            $v = $oculto ? null : $linha[ $chave ];
             if ( $v !== null ) {
                 $tem = true;
                 $v   = round( (float) $v, 2 );
             }
-            $pontos[] = array( (int) $linha['bloco'], $v );
+            $pontos[] = array( $bloco_ts, $v );
+
+            if ( ! empty( $m['col_min'] ) ) {
+                $mn = $oculto ? null : $linha[ $chave . '__min' ];
+                $mx = $oculto ? null : $linha[ $chave . '__max' ];
+                if ( $mn !== null && $mx !== null ) {
+                    $tem_faixa = true;
+                    $mn = round( (float) $mn, 2 );
+                    $mx = round( (float) $mx, 2 );
+                } else {
+                    $mn = null;
+                    $mx = null;
+                }
+                $faixa[] = array( $bloco_ts, $mn, $mx );
+            }
         }
+
         if ( ! $tem ) {
             continue; // série vazia não vira gráfico vazio
         }
-        $series[ $chave ] = array(
+
+        $serie = array(
             'rotulo'  => $m['rotulo'],
             'unidade' => $m['unidade'],
             'cor'     => $m['cor'],
             'pontos'  => $pontos,
         );
+        if ( $tem_faixa ) {
+            $serie['faixa'] = $faixa;
+        }
+        $series[ $chave ] = $serie;
     }
 
     return array(

@@ -197,8 +197,25 @@
         // ainda não há histórico do que desenhar uma grade vazia.
         if (validos.length < 2) { return ''; }
 
-        var min = Math.min.apply(null, validos);
-        var max = Math.max.apply(null, validos);
+        // A faixa mín..máx do intervalo. Só a média esconderia a rajada, e num
+        // canal de vela é o pico que conta a história do dia.
+        var faixas = [], faixaAtual = [], extremos = validos.slice();
+        if (serie.faixa) {
+            for (i = 0; i < serie.faixa.length; i++) {
+                var fx = serie.faixa[i];
+                if (fx[1] === null || fx[2] === null) {
+                    if (faixaAtual.length > 1) { faixas.push(faixaAtual); }
+                    faixaAtual = [];
+                    continue;
+                }
+                faixaAtual.push(fx);
+                extremos.push(fx[1], fx[2]);
+            }
+            if (faixaAtual.length > 1) { faixas.push(faixaAtual); }
+        }
+
+        var min = Math.min.apply(null, extremos);
+        var max = Math.max.apply(null, extremos);
         if (max - min < 1e-9) { min -= 1; max += 1; }   // série constante vira linha no meio
         var folga = (max - min) * 0.12;
         min -= folga; max += folga;
@@ -240,10 +257,38 @@
                 formatarInstante(t, span) + '</text>';
         });
 
+        // Faixa: sobe pelos máximos e volta pelos mínimos, fechando a área.
+        var dFaixa = '';
+        faixas.forEach(function (bloco) {
+            var topo = bloco.map(function (f) { return px(f[0]).toFixed(1) + ' ' + py(f[2]).toFixed(1); });
+            var base = [];
+            for (var k = bloco.length - 1; k >= 0; k--) {
+                base.push(px(bloco[k][0]).toFixed(1) + ' ' + py(bloco[k][1]).toFixed(1));
+            }
+            dFaixa += 'M' + topo.join(' L') + ' L' + base.join(' L') + ' Z ';
+        });
+
         var id = 'salgr-' + chave;
         var ultimo = validos[validos.length - 1];
+
+        // Com faixa desenhada, o gradiente sob a linha vira ruído: são duas
+        // áreas coloridas disputando a mesma leitura.
+        var fundo = dFaixa
+            ? '<path d="' + dFaixa.trim() + '" fill="' + escapar(serie.cor) +
+              '" fill-opacity="0.16" stroke="none"/>'
+            : '<path d="' + dArea.trim() + '" fill="url(#' + id + ')" stroke="none"/>';
+
+        var resumo = '';
+        if (faixas.length) {
+            var todos = [];
+            faixas.forEach(function (b) { b.forEach(function (f) { todos.push(f[1], f[2]); }); });
+            resumo = '<span class="sal-gr__faixa">' +
+                Math.round(Math.min.apply(null, todos)) + '–' +
+                Math.round(Math.max.apply(null, todos)) + '</span>';
+        }
+
         return '<figure class="sal-gr">' +
-            '<figcaption class="sal-gr__titulo"><span>' + escapar(serie.rotulo) + '</span>' +
+            '<figcaption class="sal-gr__titulo"><span>' + escapar(serie.rotulo) + resumo + '</span>' +
             '<span class="sal-gr__agora">' + ultimo +
             '<small>' + escapar(serie.unidade) + '</small></span></figcaption>' +
             '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' +
@@ -252,8 +297,7 @@
             '<stop offset="0%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0.35"/>' +
             '<stop offset="100%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0"/>' +
             '</linearGradient></defs>' +
-            grade + marcas +
-            '<path d="' + dArea.trim() + '" fill="url(#' + id + ')" stroke="none"/>' +
+            grade + marcas + fundo +
             '<path d="' + dLinha.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
             '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
             '</svg></figure>';
