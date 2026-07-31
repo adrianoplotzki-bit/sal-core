@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.7
+ * Version:     0.8
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,10 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.7' );
+define( 'SAL_CORE_VERSION', '0.8' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
-define( 'SAL_CORE_DB_VERSION', '2' );
+define( 'SAL_CORE_DB_VERSION', '3' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -48,6 +48,7 @@ function sal_core_activate() {
         waterspeed FLOAT NULL,
         heading FLOAT NULL,
         batt FLOAT NULL,
+        soc FLOAT NULL,
         ais LONGTEXT NULL,
         depth FLOAT NULL,
         water_temp FLOAT NULL,
@@ -200,6 +201,7 @@ function sal_core_valida_ponto( $data ) {
         'waterspeed' => array( 0,      100 ),
         'heading'    => array( 0,      360 ),
         'batt'       => array( 0,      200 ),   // volts (margem ampla)
+        'soc'        => array( 0,      100 ),   // % de carga — Signal K manda 0..1, converta antes
         'depth'      => array( 0,      12000 ), // metros
         'water_temp' => array( -5,     60 ),    // °C — Signal K manda kelvin, converta antes
     );
@@ -235,6 +237,7 @@ function sal_core_valida_ponto( $data ) {
         'waterspeed' => $clean['waterspeed'],
         'heading'    => $clean['heading'],
         'batt'       => $clean['batt'],
+        'soc'        => $clean['soc'],
         'ais'        => isset( $data['ais'] ) ? wp_json_encode( $data['ais'] ) : null,
         'depth'      => $clean['depth'],
         'water_temp' => $clean['water_temp'],
@@ -586,11 +589,15 @@ function sal_core_get_agora() {
     $visto_em = strtotime( $ultimo['ts'] . ' UTC' );
     $silencio = ( time() - $visto_em ) > ( SAL_CORE_SILENCIO_HORAS * HOUR_IN_SECONDS );
 
+    // A tensão continua sendo gravada, mas quem aparece é o SOC: "84%" diz
+    // quanta energia resta, e "13,3 V" só diz isso para quem sabe ler curva
+    // de bateria — e a tensão sobe com o painel solar carregando, o que faz
+    // o número parecer melhor justamente quando o banco está fraco.
     $vitais = array();
     $mapa_vitais = array(
+        'soc'        => 'bateria_pct',
         'depth'      => 'profundidade_m',
         'aws'        => 'vento_no',
-        'batt'       => 'bateria_v',
         'water_temp' => 'agua_c',
     );
     foreach ( $mapa_vitais as $col => $rotulo ) {
@@ -692,11 +699,11 @@ function sal_core_get_rota( WP_REST_Request $request ) {
  */
 function sal_core_metricas() {
     return array(
-        'bateria_v'      => array( 'col' => 'batt',       'rotulo' => 'Baterias',      'unidade' => 'V',  'cor' => '#16a34a', 'bolha' => false ),
-        'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade',  'unidade' => 'm',  'cor' => '#2563eb', 'bolha' => false ),
-        'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento aparente','unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false ),
-        'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',          'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
-        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',    'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
+        'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false ),
+        'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false ),
+        'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento',        'unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false ),
+        'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',         'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
+        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
     );
 }
 
@@ -1040,25 +1047,18 @@ function sal_core_balance_shortcode( $atts ) {
         </div>
         <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
 
-        <div class="sal-painel">
-            <div class="sal-painel__topo">
-                <span class="sal-painel__marca">Balanço</span>
-                <span class="sal-painel__situacao" id="sal-balance-situacao"></span>
-            </div>
+        <div class="sal-balanco__leituras" id="sal-balance-cartoes"></div>
 
-            <div class="sal-painel__leituras" id="sal-balance-cartoes"></div>
-
-            <div class="sal-painel__periodo" role="group" aria-label="Período do histórico">
-                <?php foreach ( $janelas as $chave => $rotulo ) : ?>
-                    <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
-                        <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
-                        <?php echo esc_html( $rotulo ); ?>
-                    </button>
-                <?php endforeach; ?>
-            </div>
-
-            <div class="sal-painel__graficos" id="sal-balance-graficos"></div>
+        <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
+            <?php foreach ( $janelas as $chave => $rotulo ) : ?>
+                <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
+                    <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
+                    <?php echo esc_html( $rotulo ); ?>
+                </button>
+            <?php endforeach; ?>
         </div>
+
+        <div class="sal-balanco__graficos" id="sal-balance-graficos"></div>
     </div>
     <?php
     return ob_get_clean();

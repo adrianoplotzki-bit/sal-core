@@ -65,164 +65,135 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Painel do Balanço — instrumento náutico
+   Painel do Balanço (shortcode [sal_balance])
    ---------------------------------------------------------------------------
-   Fundo azul-marinho profundo, leituras em Bebas Neue (a display do #SAL) e
-   rótulos em caixa alta espaçada: a gramática de um instrumento de bordo.
-   O contraste com o corpo claro da página é proposital — o painel tem que
-   ler como aparelho, não como mais um bloco de texto.
+   Claro, leituras lado a lado, números em Bebas Neue — a --sal-font-display do
+   #SAL. Condensada e naturalmente pesada, é a tipografia certa para leitura de
+   instrumento, e amarra o painel à identidade sem precisar de fundo escuro.
 
-   As variáveis caem para valores literais quando o tema não está ativo, para
-   o shortcode não quebrar fora do sal-theme.
+   As variáveis caem para literais quando o tema não está ativo, para o
+   shortcode não quebrar fora do sal-theme.
    ═══════════════════════════════════════════════════════════════════════════ */
 .sal-balanco {
-    --sal-inst-fundo:  #0a1f33;
-    --sal-inst-topo:   #103049;
-    --sal-inst-linha:  rgba(255, 255, 255, 0.10);
-    --sal-inst-tinta:  #f1f5f9;
-    --sal-inst-fraco:  rgba(241, 245, 249, 0.55);
-    --sal-inst-vivo:   #34d399;
-
     margin: 1.25rem 0 1.75rem;
     font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
 }
 
 /* ─── Mapa ─────────────────────────────────────────────────────────────── */
 .sal-balanco__mapa-caixa {
+    border: 2px solid var(--sal-border, #e5e7eb);
     border-radius: var(--sal-radius-lg, 12px);
     overflow: hidden;
-    border: 1px solid var(--sal-border, #e5e7eb);
-    box-shadow: var(--sal-shadow, 0 1px 3px rgba(0, 0, 0, 0.08));
 }
 .sal-balanco__mapa {
     height: 380px;
 }
 .sal-balanco__estado {
-    margin: 0.65rem 0 0;
+    margin: 0.7rem 0 0;
     font-size: var(--sal-fs-sm, 0.875rem);
     line-height: 1.55;
     color: var(--sal-muted, #6b7280);
 }
 
-/* ─── O painel ─────────────────────────────────────────────────────────── */
-.sal-painel {
-    margin-top: 1.25rem;
-    padding: 1.15rem 1.25rem 1.25rem;
-    border-radius: var(--sal-radius-lg, 12px);
-    background:
-        radial-gradient(120% 80% at 12% 0%, var(--sal-inst-topo) 0%, transparent 62%),
-        var(--sal-inst-fundo);
-    color: var(--sal-inst-tinta);
-}
-
-.sal-painel__topo {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding-bottom: 0.85rem;
-    border-bottom: 1px solid var(--sal-inst-linha);
-}
-.sal-painel__marca {
-    font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
-    font-size: 1.35rem;
-    letter-spacing: 0.09em;
-    line-height: 1;
-}
-.sal-painel__situacao {
-    margin-left: auto;
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--sal-inst-fraco);
-}
-/* Ponto que só acende quando o barco está mesmo transmitindo. */
-.sal-painel__situacao.is-vivo::before {
-    content: "";
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    margin-right: 0.45rem;
-    border-radius: 50%;
-    background: var(--sal-inst-vivo);
-    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
-    vertical-align: middle;
-}
-
-/* ─── Leituras ─────────────────────────────────────────────────────────── */
-.sal-painel__leituras {
+/* ─── Leituras ao vivo ─────────────────────────────────────────────────── */
+.sal-balanco__leituras {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.1rem;
 }
 .sal-vital {
-    padding: 1rem 0.9rem;
-    border-right: 1px solid var(--sal-inst-linha);
-}
-.sal-vital:last-child {
-    border-right: 0;
+    padding: 0.95rem 1.1rem 0.85rem;
+    background: var(--sal-card, #fff);
+    border: 2px solid var(--sal-border, #e5e7eb);
+    border-radius: var(--sal-radius-lg, 12px);
 }
 .sal-vital__valor {
     display: block;
     font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
-    font-size: 2.4rem;
+    font-size: 2.5rem;
     line-height: 0.95;
     letter-spacing: 0.02em;
+    color: var(--sal-ink, #111827);
     font-variant-numeric: tabular-nums;
 }
 .sal-vital__valor small {
     font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 400;
     letter-spacing: 0;
-    margin-left: 0.2rem;
-    color: var(--sal-inst-fraco);
+    margin-left: 0.22rem;
+    color: var(--sal-muted, #6b7280);
 }
 .sal-vital__rotulo {
     display: block;
-    margin-top: 0.35rem;
-    font-size: 0.63rem;
+    margin-top: 0.45rem;
+    font-size: 0.66rem;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--sal-inst-fraco);
+    letter-spacing: 0.13em;
+    color: var(--sal-muted, #6b7280);
+}
+/* A situação é palavra, não número: Bebas em 2.5rem engoliria "navegando
+   à vela". Cai para a sans, menor, e ganha respiro para alinhar com os
+   números ao lado. */
+.sal-vital--estado .sal-vital__valor {
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 1.05rem;
+    font-weight: var(--sal-weight-semibold, 600);
+    line-height: 1.25;
+    letter-spacing: 0;
+    padding-top: 0.55rem;
+}
+/* Ponto que só acende quando o barco está mesmo transmitindo. */
+.sal-vital--estado.is-vivo .sal-vital__valor::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 0.4rem;
+    border-radius: 50%;
+    background: var(--sal-green, #059669);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    vertical-align: middle;
 }
 
 /* ─── Seletor de período ───────────────────────────────────────────────── */
-.sal-painel__periodo {
+.sal-balanco__periodo {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    padding-top: 1rem;
-    margin-top: 0.25rem;
-    border-top: 1px solid var(--sal-inst-linha);
+    gap: 0.4rem;
+    margin: 1.5rem 0 1.1rem;
 }
-.sal-painel__periodo button {
-    padding: 0.4rem 0.85rem;
+.sal-balanco__periodo button {
+    padding: 0.42rem 0.95rem;
     font-family: inherit;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.11em;
     cursor: pointer;
-    color: var(--sal-inst-fraco);
-    background: transparent;
-    border: 1px solid var(--sal-inst-linha);
+    color: var(--sal-muted, #6b7280);
+    background: var(--sal-card, #fff);
+    border: 2px solid var(--sal-border, #e5e7eb);
     border-radius: 999px;
     transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
-.sal-painel__periodo button:hover {
-    color: var(--sal-inst-tinta);
-    border-color: rgba(255, 255, 255, 0.3);
+.sal-balanco__periodo button:hover {
+    color: var(--sal-ink, #111827);
+    border-color: var(--sal-muted, #6b7280);
 }
-.sal-painel__periodo button.is-ativo {
+.sal-balanco__periodo button.is-ativo {
     color: #fff;
-    background: var(--sal-red, #dc2626);
-    border-color: var(--sal-red, #dc2626);
+    background: var(--sal-ink, #111827);
+    border-color: var(--sal-ink, #111827);
 }
 
 /* ─── Gráficos ─────────────────────────────────────────────────────────── */
-.sal-painel__graficos {
-    margin-top: 1.1rem;
-}
 .sal-gr {
-    margin: 0 0 1.1rem;
+    margin: 0 0 1.25rem;
+    padding: 0.85rem 1rem 0.6rem;
+    background: var(--sal-card, #fff);
+    border: 2px solid var(--sal-border, #e5e7eb);
+    border-radius: var(--sal-radius-lg, 12px);
 }
 .sal-gr:last-child {
     margin-bottom: 0;
@@ -232,60 +203,55 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 0.6rem;
-    margin-bottom: 0.15rem;
-    font-size: 0.63rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.66rem;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--sal-inst-fraco);
+    letter-spacing: 0.13em;
+    color: var(--sal-muted, #6b7280);
 }
 .sal-gr__agora {
     font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
-    font-size: 1.25rem;
+    font-size: 1.45rem;
     letter-spacing: 0.03em;
-    color: var(--sal-inst-tinta);
+    color: var(--sal-ink, #111827);
     text-transform: none;
     font-variant-numeric: tabular-nums;
 }
 .sal-gr__agora small {
     font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
-    font-size: 0.66rem;
+    font-size: 0.7rem;
     letter-spacing: 0;
-    margin-left: 0.18rem;
-    color: var(--sal-inst-fraco);
+    margin-left: 0.2rem;
+    color: var(--sal-muted, #6b7280);
 }
-/* preserveAspectRatio="none" no SVG faria o traço engordar ao esticar; o
+/* preserveAspectRatio="none" faria o traço engordar ao esticar; o
    vector-effect no <path> mantém a espessura constante. */
 .sal-gr svg {
     display: block;
     width: 100%;
-    height: 92px;
+    height: 100px;
     overflow: visible;
 }
 .sal-gr__grade {
-    stroke: #fff;
+    stroke: var(--sal-ink, #111827);
     stroke-width: 1;
-    opacity: 0.09;
+    opacity: 0.1;
     vector-effect: non-scaling-stroke;
 }
 .sal-gr__eixo {
     font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
     font-size: 9px;
-    fill: #fff;
-    opacity: 0.42;
+    fill: var(--sal-muted, #6b7280);
 }
-.sal-painel__vazio {
+.sal-balanco__vazio {
     margin: 0;
     padding: 1rem 0;
     font-size: var(--sal-fs-sm, 0.875rem);
-    color: var(--sal-inst-fraco);
+    color: var(--sal-muted, #6b7280);
 }
 
-@media (max-width: 560px) {
-    .sal-vital {
-        border-right: 0;
-        border-bottom: 1px solid var(--sal-inst-linha);
-    }
+@media (max-width: 480px) {
     .sal-vital__valor {
-        font-size: 2rem;
+        font-size: 2.1rem;
     }
 }

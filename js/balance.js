@@ -19,8 +19,7 @@
     var elEstado = document.getElementById('sal-balance-estado');
     var elCartoes = document.getElementById('sal-balance-cartoes');
     var elGraficos = document.getElementById('sal-balance-graficos');
-    var elSituacao = document.getElementById('sal-balance-situacao');
-    var elPeriodo = document.querySelector('.sal-painel__periodo');
+    var elPeriodo = document.querySelector('.sal-balanco__periodo');
     if (!cfg || !elMapa || typeof L === 'undefined') { return; }
 
     var INTERVALO = 5 * 60 * 1000;
@@ -37,7 +36,7 @@
     };
 
     var VITAIS = [
-        { chave: 'bateria_v', rotulo: 'Baterias', unidade: 'V' },
+        { chave: 'bateria_pct', rotulo: 'Bateria', unidade: '%' },
         { chave: 'profundidade_m', rotulo: 'Profundidade', unidade: 'm' },
         { chave: 'vento_no', rotulo: 'Vento', unidade: 'nós' },
         { chave: 'agua_c', rotulo: 'Água', unidade: '°C' }
@@ -125,16 +124,19 @@
     /* ------------------------------------------------------------ cartões */
 
     function desenharCartoes(agora) {
-        if (elSituacao) {
-            var sit = agora && ESTADOS[agora.estado];
-            elSituacao.textContent = sit || '';
-            elSituacao.className = 'sal-painel__situacao' +
-                (agora && agora.transmitindo ? ' is-vivo' : '');
-        }
-
         if (!elCartoes) { return; }
         var v = (agora && agora.vitais) || {};
         var html = '';
+
+        var estado = agora && ESTADOS[agora.estado];
+        if (estado) {
+            // O ponto só acende quando o barco está mesmo transmitindo: com
+            // dado velho, a situação continua sendo verdade, mas não é "agora".
+            html += '<div class="sal-vital sal-vital--estado' +
+                (agora.transmitindo ? ' is-vivo' : '') +
+                '"><span class="sal-vital__valor">' + escapar(estado) + '</span>' +
+                '<span class="sal-vital__rotulo">Situação</span></div>';
+        }
 
         VITAIS.forEach(function (d) {
             if (typeof v[d.chave] !== 'number') { return; }
@@ -144,7 +146,7 @@
         });
 
         elCartoes.innerHTML = html ||
-            '<p class="sal-painel__vazio">Sem leituras no momento.</p>';
+            '<p class="sal-balanco__vazio">Sem leituras no momento.</p>';
     }
 
     /* ------------------------------------------------------------ gráficos */
@@ -253,7 +255,7 @@
             });
         }
         elGraficos.innerHTML = html ||
-            '<p class="sal-painel__vazio">Ainda não há histórico suficiente para traçar. ' +
+            '<p class="sal-balanco__vazio">Ainda não há histórico suficiente para traçar. ' +
             'Os gráficos aparecem quando o Balanço começar a transmitir.</p>';
     }
 
