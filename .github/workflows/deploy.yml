@@ -50,17 +50,32 @@ jobs:
           REMOTE_DIR: ${{ secrets.REMOTE_DIR_PLUGIN }}
         run: |
           sudo apt-get install -y lftp
+
+          # LISTA DE INCLUSÃO, não de exclusão.
+          #
+          # Até 2026-07-31 este job fazia "mirror ./ $REMOTE_DIR/", ou seja,
+          # espelhava o REPOSITÓRIO INTEIRO dentro da pasta do plugin. Foram
+          # parar em produção: uma cópia do tema (684 KB, duplicando
+          # wp-content/themes), o .github/, um .git de 1,1 MB, e o
+          # HANDOFF_AI.md — este último servido em HTTP 200, publicando o mapa
+          # arquitetural do site. As exclusões por glob não seguravam: bastava
+          # alguém adicionar um arquivo novo na raiz do repo para ele vazar.
+          #
+          # Com lista de inclusão, o pior caso vira "asset faltando" (barulhento
+          # e óbvio) em vez de "documento interno publicado" (silencioso).
+          # Arquivo novo do plugin => acrescente aqui.
+          rm -rf _envio && mkdir _envio
+          cp sal-core.php _envio/
+          cp -r css js _envio/
+
           lftp <<LFTP_CMDS
           set sftp:auto-confirm yes
           set net:max-retries 3
           set sftp:connect-program "ssh -a -x -l $SFTP_USER -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o StrictHostKeyChecking=accept-new"
           open sftp://$SFTP_USER@$SFTP_HOST
           mirror --reverse --delete --verbose \
-            --exclude-glob .git \
-            --exclude-glob .gitignore \
-            --exclude-glob .github \
             --exclude-glob .DS_Store \
-            ./ $REMOTE_DIR/
+            ./_envio/ $REMOTE_DIR/
           bye
           LFTP_CMDS
 
