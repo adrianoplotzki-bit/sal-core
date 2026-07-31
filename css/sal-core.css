@@ -291,16 +291,20 @@
     margin: 0.55rem 0 0;
     padding-top: 0.55rem;
     border-top: 1px solid var(--sal-border, #e5e7eb);
-    font-size: 0.8rem;
-    line-height: 1.45;
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: var(--sal-fs-sm, 0.875rem);
+    line-height: 1.5;
 }
 .sal-gr__mare-rodape:empty {
     display: none;
 }
+/* Mesmo tamanho e mesma fonte da linha de cima — a hierarquia fica só na
+   cor, que basta para separar o dado da ressalva sem sujar o bloco. */
 .sal-gr__mare-rodape em {
     display: block;
-    margin-top: 0.2rem;
-    font-size: 0.72rem;
+    margin-top: 0.15rem;
+    font-size: inherit;
+    font-family: inherit;
     font-style: normal;
     color: var(--sal-muted, #6b7280);
 }

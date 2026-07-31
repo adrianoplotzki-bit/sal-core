@@ -385,9 +385,13 @@
         if (faixas.length) {
             var todos = [];
             faixas.forEach(function (b) { b.forEach(function (f) { todos.push(f[1], f[2]); }); });
+            var lo = Math.min.apply(null, todos), hi = Math.max.apply(null, todos);
+            // Arredondar para inteiro sempre transformava "5,4 a 5,9" em
+            // "5–6", que não diz nada. A casa decimal entra quando a
+            // amplitude é pequena o bastante para o inteiro apagá-la.
+            var casas = (hi - lo) < 10 ? 1 : 0;
             resumo = '<span class="sal-gr__faixa">' +
-                Math.round(Math.min.apply(null, todos)) + '–' +
-                Math.round(Math.max.apply(null, todos)) + '</span>';
+                lo.toFixed(casas) + '–' + hi.toFixed(casas) + '</span>';
         }
 
         if (previsao.length > 1) {
