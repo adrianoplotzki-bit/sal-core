@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.6' );
+define( 'SAL_CORE_VERSION', '0.6.1' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '2' );
@@ -446,22 +446,41 @@ function sal_core_atualiza_celula( $lat, $lon ) {
         update_option( 'sal_core_celula_publicada', $nova, false );
         return;
     }
-    if ( (int) $atual[0] === $nova[0] && (int) $atual[1] === $nova[1] ) {
+    $atual = array( (int) $atual[0], (int) $atual[1] );
+    if ( $atual === $nova ) {
         return;
     }
 
-    // Distância do ponto à borda mais próxima da célula nova.
-    $off  = sal_core_grade_offset();
-    $d_lat = (float) $lat - ( $nova[0] * SAL_CORE_CELULA_GRAUS + $off[0] );
-    $d_lon = (float) $lon - ( $nova[1] * SAL_CORE_CELULA_GRAUS + $off[1] );
-    $dentro = min(
-        $d_lat, SAL_CORE_CELULA_GRAUS - $d_lat,
-        $d_lon, SAL_CORE_CELULA_GRAUS - $d_lon
-    );
-    if ( $dentro < SAL_CORE_MARGEM_GRAUS ) {
-        return; // ainda colado na divisa: mantém a célula antiga
+    // A histerese é POR EIXO, e isso não é detalhe.
+    //
+    // A versão ingênua exige estar a salvo das quatro bordas da célula nova
+    // ao mesmo tempo. Com ela, um barco que navegue rente a uma divisa de
+    // longitude nunca satisfaz a condição — e a célula publicada TRAVA. O
+    // barco se afasta, a célula fica para trás, e a bolha passa a ser medida
+    // contra uma célula obsoleta: pontos de rota vizinhos à posição real
+    // voltariam a ser publicados. A proteção falharia exatamente onde
+    // deveria agir.
+    //
+    // Por eixo, cada índice anda quando o barco está fundo o bastante
+    // naquele eixo, independentemente do outro.
+    $off   = sal_core_grade_offset();
+    $pos   = array( (float) $lat, (float) $lon );
+    $final = $atual;
+
+    foreach ( array( 0, 1 ) as $eixo ) {
+        if ( $nova[ $eixo ] === $atual[ $eixo ] ) {
+            continue;
+        }
+        $d      = $pos[ $eixo ] - ( $nova[ $eixo ] * SAL_CORE_CELULA_GRAUS + $off[ $eixo ] );
+        $dentro = min( $d, SAL_CORE_CELULA_GRAUS - $d );
+        if ( $dentro >= SAL_CORE_MARGEM_GRAUS ) {
+            $final[ $eixo ] = $nova[ $eixo ];
+        }
     }
-    update_option( 'sal_core_celula_publicada', $nova, false );
+
+    if ( $final !== $atual ) {
+        update_option( 'sal_core_celula_publicada', $final, false );
+    }
 }
 
 /**
