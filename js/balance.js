@@ -22,8 +22,14 @@
     var elPeriodo = document.querySelector('.sal-balanco__periodo');
     if (!cfg || !elMapa || typeof L === 'undefined') { return; }
 
-    var INTERVALO = 5 * 60 * 1000;
+    // Dois relógios em vez de um. /agora é uma linha do banco e muda a cada
+    // minuto; /rota e /series varrem a tabela inteira e mudam devagar. Buscar
+    // tudo no mesmo ritmo obrigaria a escolher entre painel lento e servidor
+    // castigado — separando, dá para ter os dois.
+    var INTERVALO_VIVO = 60 * 1000;
+    var INTERVALO_PESADO = 5 * 60 * 1000;
     var janelaAtual = '24h';
+    var ultimoAgora = null, ultimaRota = null, chaveEnquadrada = null;
 
     var ESTADOS = {
         moored: 'atracado',
@@ -109,12 +115,20 @@
             limites.push([agora.area.lat, agora.area.lon]);
         }
 
-        if (limites.length) {
+        // Reenquadra só quando o que há para mostrar muda de fato. Com o
+        // painel atualizando a cada minuto, um fitBounds por ciclo desfaria o
+        // zoom e o arrasto do leitor sem parar.
+        var chave = (agora && agora.area ? agora.area.lat + ',' + agora.area.lon + ',' + agora.area.raio_km : '-') +
+            '|' + (rota && rota.pontos ? rota.pontos.length : 0) +
+            '|' + (rota && rota.lugares ? rota.lugares.length : 0);
+
+        if (limites.length && chave !== chaveEnquadrada) {
             var caixa = L.latLngBounds(limites);
             // Estende pelo círculo inteiro, não só pelo centro dele: senão o
             // enquadramento cortaria metade da área publicada.
             if (camadaArea) { caixa = caixa.extend(camadaArea.getBounds()); }
             mapa.fitBounds(caixa, { padding: [24, 24] });
+            chaveEnquadrada = chave;
         }
 
         if (elEstado) { elEstado.textContent = texto(agora); }
@@ -280,14 +294,24 @@
         });
     }
 
-    function atualizar() {
-        Promise.all([buscar(cfg.agora), buscar(cfg.rota)]).then(function (r) {
-            desenharMapa(r[0], r[1]);
-            desenharCartoes(r[0]);
+    function cicloVivo() {
+        return buscar(cfg.agora).then(function (agora) {
+            ultimoAgora = agora;
+            desenharCartoes(agora);
+            desenharMapa(agora, ultimaRota);
+        });
+    }
+
+    function cicloPesado() {
+        buscar(cfg.rota).then(function (rota) {
+            ultimaRota = rota;
+            desenharMapa(ultimoAgora, rota);
         });
         carregarSeries();
     }
 
-    atualizar();
-    setInterval(atualizar, INTERVALO);
+    cicloVivo();
+    cicloPesado();
+    setInterval(cicloVivo, INTERVALO_VIVO);
+    setInterval(cicloPesado, INTERVALO_PESADO);
 }());
