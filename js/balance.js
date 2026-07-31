@@ -19,7 +19,6 @@
     var elEstado = document.getElementById('sal-balance-estado');
     var elCartoes = document.getElementById('sal-balance-cartoes');
     var elGraficos = document.getElementById('sal-balance-graficos');
-    var elMare = document.getElementById('sal-balance-mare');
     var elPeriodo = document.querySelector('.sal-balanco__periodo');
     if (!cfg || !elMapa || typeof L === 'undefined') { return; }
 
@@ -162,12 +161,18 @@
         elCartoes.innerHTML = html ||
             '<p class="sal-balanco__vazio">Sem leituras no momento.</p>';
 
-        desenharMare(agora && agora.mare);
+        desenharMare();
     }
 
-    function desenharMare(mare) {
-        if (!elMare) { return; }
-        if (!mare) { elMare.hidden = true; return; }
+    // Rodapé do gráfico de profundidade: é ali que a informação de maré tem
+    // contexto, ao lado da curva prevista e da medida. Fica num alvo próprio
+    // para acompanhar o ciclo de 60 s sem precisar redesenhar os gráficos,
+    // que só se refazem a cada 5 min.
+    function desenharMare() {
+        var alvo = document.getElementById('sal-balance-mare');
+        if (!alvo) { return; }
+        var mare = ultimoAgora && ultimoAgora.mare;
+        if (!mare) { alvo.innerHTML = ''; return; }
 
         var p = partes(Math.floor(Date.parse(mare.proxima_em) / 1000));
         var frases = ['Maré ' + mare.sentido + '.'];
@@ -181,15 +186,13 @@
                 (minQ < agoraQ ? ', ' + minQ.toFixed(1) + ' m na baixamar' : '') + '.');
         }
 
-        // A ressalva não é rodapé decorativo. O modelo é oceânico e de grade
-        // grossa; comparado à estação de Maceió ele adiantou de 16 a 60 min
-        // (medido em 2026-07-31). Dentro de baía ou estuário essa diferença é
-        // a regra, não a exceção — e quem decide fundear com base nisso
-        // precisa saber.
-        elMare.innerHTML = '<span>' + frases.join(' ') + '</span>' +
+        // A ressalva não é enfeite. O modelo é oceânico e de grade grossa;
+        // comparado à estação de Maceió ele adiantou de 16 a 60 min (medido
+        // em 2026-07-31). Dentro de baía ou estuário essa diferença é a
+        // regra, e quem decide fundear com base nisso precisa saber.
+        alvo.innerHTML = '<span>' + frases.join(' ') + '</span>' +
             '<em>Previsão de modelo oceânico global; em baías e estuários o ' +
             'horário costuma atrasar em relação a ela.</em>';
-        elMare.hidden = false;
     }
 
     /* ------------------------------------------------------------ gráficos */
@@ -197,7 +200,11 @@
     // Todos os horários do painel usam o fuso do SITE, não o do navegador. A
     // maré acontece na hora do barco: quem abrir a página de outro fuso veria
     // a preamar deslocada se o relógio fosse o dele.
-    var FUSO_S = (typeof cfg.fuso_horas === 'number' ? cfg.fuso_horas : 0) * 3600;
+    // parseFloat, não typeof: wp_localize_script serializa todo escalar como
+    // STRING, então fuso_horas chega "-3". Com a checagem de tipo o
+    // deslocamento zerava e o painel mostrava UTC — três horas erradas, sem
+    // nenhum sinal de erro.
+    var FUSO_S = (parseFloat(cfg.fuso_horas) || 0) * 3600;
 
     function partes(unix) {
         var d = new Date((unix + FUSO_S) * 1000);
@@ -401,7 +408,9 @@
             '<path d="' + dLinha.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
             '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
             dMarcas +
-            '</svg></figure>';
+            '</svg>' +
+            (serie.previsao ? '<p class="sal-gr__mare-rodape" id="sal-balance-mare"></p>' : '') +
+            '</figure>';
     }
 
     function desenharGraficos(dados) {
@@ -415,6 +424,7 @@
         elGraficos.innerHTML = html ||
             '<p class="sal-balanco__vazio">Ainda não há histórico suficiente para traçar. ' +
             'Os gráficos aparecem quando o Balanço começar a transmitir.</p>';
+        desenharMare();
     }
 
     function carregarSeries() {

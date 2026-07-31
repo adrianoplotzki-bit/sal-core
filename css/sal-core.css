@@ -286,23 +286,25 @@
     vector-effect: non-scaling-stroke;
 }
 
-/* Linha de maré */
-.sal-balanco__mare {
-    margin: 0.8rem 0 0;
-    padding: 0.7rem 0.9rem;
-    border-left: 3px solid var(--sal-blue, #1a5b8f);
-    background: var(--sal-blue-bg, #e6eef5);
-    border-radius: 0 var(--sal-radius, 8px) var(--sal-radius, 8px) 0;
-    font-size: var(--sal-fs-sm, 0.875rem);
-    line-height: 1.5;
+/* Rodapé de maré, dentro do gráfico de profundidade */
+.sal-gr__mare-rodape {
+    margin: 0.55rem 0 0;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--sal-border, #e5e7eb);
+    font-size: 0.8rem;
+    line-height: 1.45;
 }
-.sal-balanco__mare em {
+.sal-gr__mare-rodape:empty {
+    display: none;
+}
+.sal-gr__mare-rodape em {
     display: block;
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
     font-style: normal;
-    opacity: 0.7;
+    color: var(--sal-muted, #6b7280);
 }
+
 .sal-gr__previsao {
     fill: none;
     stroke: var(--sal-muted, #6b7280);

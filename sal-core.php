@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.13
+ * Version:     0.13.1
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.13' );
+define( 'SAL_CORE_VERSION', '0.13.1' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -1396,7 +1396,6 @@ function sal_core_balance_shortcode( $atts ) {
         <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
 
         <div class="sal-balanco__leituras" id="sal-balance-cartoes"></div>
-        <p class="sal-balanco__mare" id="sal-balance-mare" hidden></p>
 
         <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
             <?php foreach ( $janelas as $chave => $rotulo ) : ?>
