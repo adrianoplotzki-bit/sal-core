@@ -303,3 +303,25 @@
     font-style: normal;
     opacity: 0.7;
 }
+.sal-gr__previsao {
+    fill: none;
+    stroke: var(--sal-muted, #6b7280);
+    stroke-width: 1.4;
+    stroke-dasharray: 4 3;
+    opacity: 0.75;
+    vector-effect: non-scaling-stroke;
+}
+.sal-gr__legenda {
+    margin-left: 0.45rem;
+    padding-left: 0.9rem;
+    position: relative;
+    letter-spacing: 0.04em;
+}
+.sal-gr__legenda::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0.7rem;
+    border-top: 1.4px dashed var(--sal-muted, #6b7280);
+}

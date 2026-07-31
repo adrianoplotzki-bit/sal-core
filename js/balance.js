@@ -214,7 +214,7 @@
         return span <= 2 * 86400 ? p.hora : p.dia;
     }
 
-    function svgGrafico(chave, serie) {
+    function svgGrafico(chave, serie, t0, t1) {
         var P = serie.pontos;
         var W = 640, H = 150, ESQ = 44, DIR = 8, TOPO = 14, BASE = 24;
 
@@ -255,13 +255,24 @@
             if (faixaAtual.length > 1) { faixas.push(faixaAtual); }
         }
 
+        var previsao = [];
+        if (serie.previsao) {
+            serie.previsao.forEach(function (q) {
+                if (q[1] === null || q[0] < t0 || q[0] > t1) { return; }
+                previsao.push(q);
+                extremos.push(q[1]);
+            });
+        }
+
         var min = Math.min.apply(null, extremos);
         var max = Math.max.apply(null, extremos);
         if (max - min < 1e-9) { min -= 1; max += 1; }   // série constante vira linha no meio
         var folga = (max - min) * 0.12;
         min -= folga; max += folga;
 
-        var t0 = P[0][0], t1 = P[P.length - 1][0];
+        // t0/t1 vêm do recorte COMUM da resposta, não do primeiro e último
+        // ponto desta série. Cada gráfico com o próprio eixo faria curvas de
+        // durações diferentes parecerem alinhadas.
         if (t1 <= t0) { t1 = t0 + 1; }
         var span = t1 - t0;
 
@@ -308,6 +319,16 @@
             }
             dFaixa += 'M' + topo.join(' L') + ' L' + base.join(' L') + ' Z ';
         });
+
+        // Maré prevista, deslocada para o mesmo eixo da sondagem. Tracejada
+        // porque é previsão, não medição — e é da distância horizontal entre
+        // ela e a curva cheia que se lê o atraso do estuário.
+        var dPrev = '';
+        if (previsao.length > 1) {
+            dPrev = '<path d="M' + previsao.map(function (q) {
+                return px(q[0]).toFixed(1) + ' ' + py(q[1]).toFixed(1);
+            }).join(' L') + '" class="sal-gr__previsao"/>';
+        }
 
         var id = 'salgr-' + chave;
         var ultimo = validos[validos.length - 1];
@@ -362,6 +383,10 @@
                 Math.round(Math.max.apply(null, todos)) + '</span>';
         }
 
+        if (previsao.length > 1) {
+            resumo += '<span class="sal-gr__legenda">maré prevista</span>';
+        }
+
         return '<figure class="sal-gr">' +
             '<figcaption class="sal-gr__titulo"><span>' + escapar(serie.rotulo) + resumo + '</span>' +
             '<span class="sal-gr__agora">' + ultimo +
@@ -372,7 +397,7 @@
             '<stop offset="0%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0.35"/>' +
             '<stop offset="100%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0"/>' +
             '</linearGradient></defs>' +
-            grade + marcas + fundo +
+            grade + marcas + fundo + dPrev +
             '<path d="' + dLinha.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
             '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
             dMarcas +
@@ -384,7 +409,7 @@
         var html = '';
         if (dados && dados.series) {
             Object.keys(dados.series).forEach(function (chave) {
-                html += svgGrafico(chave, dados.series[chave]);
+                html += svgGrafico(chave, dados.series[chave], dados.de_unix, dados.ate_unix);
             });
         }
         elGraficos.innerHTML = html ||

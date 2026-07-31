@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.12
+ * Version:     0.13
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.12' );
+define( 'SAL_CORE_VERSION', '0.13' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -1113,57 +1113,74 @@ function sal_core_get_series( WP_REST_Request $request ) {
         $series[ $chave ] = $serie;
     }
 
-    // Maré prevista, sobreposta ao período pedido. Vem de fora (Open-Meteo),
-    // não do banco, então só existe onde a previsão alcança: -7 a +3 dias.
+    // Maré prevista SOBREPOSTA À PROFUNDIDADE, no mesmo eixo e no mesmo
+    // recorte — nunca como gráfico próprio.
+    //
+    // Unidades diferentes (metro de fundo contra metro de maré) resolvidas
+    // por deslocamento: profundidade = fundo + maré + constante, então somar
+    // à previsão a diferença entre as duas médias põe as curvas na mesma
+    // escala. O que sobra de diferença entre elas é o que interessa — a
+    // defasagem de fase, que é o atraso do estuário.
+    $de_unix  = (int) ( floor( strtotime( $extremos['de'] . ' UTC' ) / $bloco ) * $bloco );
+    $ate_unix = (int) ( floor( strtotime( $extremos['ate'] . ' UTC' ) / $bloco ) * $bloco );
+
     $ultimo_ponto = sal_core_ultimo_ponto();
-    if ( $ultimo_ponto ) {
+    if ( $ultimo_ponto && isset( $series['profundidade_m'] ) ) {
         $prev = sal_core_mare_prevista( $ultimo_ponto['lat'], $ultimo_ponto['lon'] );
         if ( $prev ) {
-            $de_unix  = strtotime( $extremos['de'] . ' UTC' );
-            $ate_unix = strtotime( $extremos['ate'] . ' UTC' ) + 6 * HOUR_IN_SECONDS;
-            $pontos_mare = array();
+            // Recorte idêntico ao dos dados medidos. Sem isto a previsão
+            // avançaria pelo futuro e os dois gráficos ficariam com escalas
+            // de tempo diferentes, o que torna a comparação mentirosa.
+            $mare = array();
+            $soma_mare = 0.0;
+            $n_mare = 0;
             foreach ( $prev as $x ) {
-                if ( $x[0] >= $de_unix && $x[0] <= $ate_unix ) {
-                    $pontos_mare[] = array( $x[0], $x[1] === null ? null : round( $x[1], 2 ) );
+                if ( $x[0] < $de_unix || $x[0] > $ate_unix || $x[1] === null ) {
+                    continue;
                 }
+                $mare[] = $x;
+                $soma_mare += $x[1];
+                $n_mare++;
             }
-            if ( count( $pontos_mare ) >= 6 ) {
+
+            $soma_prof = 0.0;
+            $n_prof = 0;
+            foreach ( $series['profundidade_m']['pontos'] as $pt ) {
+                if ( $pt[1] !== null ) { $soma_prof += $pt[1]; $n_prof++; }
+            }
+
+            if ( $n_mare >= 3 && $n_prof >= 3 ) {
+                $desloc = ( $soma_prof / $n_prof ) - ( $soma_mare / $n_mare );
+                $curva = array();
+                foreach ( $mare as $x ) {
+                    $curva[] = array( $x[0], round( $x[1] + $desloc, 2 ) );
+                }
+                $series['profundidade_m']['previsao'] = $curva;
+
                 $marcas_mare = array();
                 foreach ( sal_core_extremos_serie( $prev, HOUR_IN_SECONDS ) as $mk ) {
                     if ( $mk['ts'] >= $de_unix && $mk['ts'] <= $ate_unix ) {
                         $marcas_mare[] = $mk;
                     }
                 }
-                $series['mare_m'] = array(
-                    'rotulo'   => 'Maré prevista',
-                    'unidade'  => 'm',
-                    'cor'      => '#0d9488',
-                    'pontos'   => $pontos_mare,
-                    'marcas'   => $marcas_mare,
-                    'previsao' => true,
-                );
-                // As mesmas viradas vão para o gráfico de profundidade: é
-                // sobrepondo previsão e sondagem que se enxerga o atraso do
-                // estuário, que é o motivo de existir esta função.
-                // Chave diferente de propósito: no gráfico de maré a marca
-                // tem altura própria e vira ponto na curva; no de
-                // profundidade, o eixo Y é outro (metros de fundo, não de
-                // maré), então só o INSTANTE faz sentido — vira risco
-                // vertical. Usar a mesma chave desenharia a preamar em 1,15 m
-                // num eixo que vai de 5 a 7 m, ou seja, fora do gráfico.
-                if ( isset( $series['profundidade_m'] ) && $marcas_mare ) {
+                if ( $marcas_mare ) {
                     $series['profundidade_m']['marcas_tempo'] = $marcas_mare;
                 }
             }
         }
     }
 
+    // TODOS os gráficos usam este recorte, sem exceção. Deixar cada série
+    // definir o próprio começo e fim faria duas curvas com escalas de tempo
+    // diferentes parecerem alinhadas — e a comparação entre elas seria falsa.
     return array(
-        'janela'  => $janela,
-        'bloco_s' => $bloco,
-        'de'      => gmdate( 'c', strtotime( $extremos['de'] . ' UTC' ) ),
-        'ate'     => gmdate( 'c', strtotime( $extremos['ate'] . ' UTC' ) ),
-        'series'  => $series,
+        'janela'   => $janela,
+        'bloco_s'  => $bloco,
+        'de'       => gmdate( 'c', $de_unix ),
+        'ate'      => gmdate( 'c', $ate_unix ),
+        'de_unix'  => $de_unix,
+        'ate_unix' => $ate_unix,
+        'series'   => $series,
     );
 }
 
