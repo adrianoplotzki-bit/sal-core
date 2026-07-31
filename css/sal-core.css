@@ -79,3 +79,110 @@
     line-height: 1.5;
     opacity: 0.85;
 }
+
+/* Sinais vitais ao vivo */
+.sal-balanco__cartoes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+.sal-vital {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.02);
+}
+.sal-vital__valor {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.15;
+}
+.sal-vital__valor small {
+    font-size: 0.8rem;
+    font-weight: 400;
+    margin-left: 3px;
+    opacity: 0.65;
+}
+.sal-vital--estado .sal-vital__valor {
+    font-size: 1.05rem;
+    padding-top: 6px;
+}
+.sal-vital__rotulo {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.6;
+}
+
+/* Seletor de período */
+.sal-balanco__periodo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 20px 0 10px;
+}
+.sal-balanco__periodo button {
+    padding: 6px 14px;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+}
+.sal-balanco__periodo button:hover {
+    border-color: rgba(0, 0, 0, 0.35);
+}
+.sal-balanco__periodo button.is-ativo {
+    background: #111;
+    border-color: #111;
+    color: #fff;
+}
+
+/* Gráficos */
+.sal-gr {
+    margin: 0 0 18px;
+}
+.sal-gr__titulo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.6;
+    margin-bottom: 2px;
+}
+.sal-gr__agora {
+    font-size: 0.95rem;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+    opacity: 1;
+}
+.sal-gr svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+}
+.sal-gr__grade {
+    stroke: currentColor;
+    stroke-width: 1;
+    opacity: 0.12;
+}
+.sal-gr__eixo {
+    font-size: 10px;
+    fill: currentColor;
+    opacity: 0.5;
+}
+.sal-balanco__vazio {
+    font-size: 0.9rem;
+    opacity: 0.6;
+}

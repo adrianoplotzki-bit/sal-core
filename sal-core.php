@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.6.1
+ * Version:     0.7
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.6.1' );
+define( 'SAL_CORE_VERSION', '0.7' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '2' );
@@ -106,6 +106,12 @@ function sal_core_register_rest() {
     register_rest_route( 'sal/v1', '/rota', array(
         'methods'  => 'GET',
         'callback' => 'sal_core_get_rota',
+        'permission_callback' => '__return_true',
+    ) );
+    // Histórico dos sinais vitais, agregado. Aceita ?janela=24h|7d|30d|tudo.
+    register_rest_route( 'sal/v1', '/series', array(
+        'methods'  => 'GET',
+        'callback' => 'sal_core_get_series',
         'permission_callback' => '__return_true',
     ) );
     // Aposentado — ver sal_core_get_last_point().
@@ -677,6 +683,157 @@ function sal_core_get_rota( WP_REST_Request $request ) {
 }
 
 /**
+ * Métricas do histórico. `bolha` marca as que precisam do filtro de posição.
+ *
+ * Velocidade é a única com `bolha => true`, e não é excesso de zelo: uma série
+ * de velocidade, integrada a partir do último ponto de rota publicado, dá a
+ * distância percorrida desde ali — navegação estimada. As outras são
+ * escalares que não apontam para lugar nenhum.
+ */
+function sal_core_metricas() {
+    return array(
+        'bateria_v'      => array( 'col' => 'batt',       'rotulo' => 'Baterias',      'unidade' => 'V',  'cor' => '#16a34a', 'bolha' => false ),
+        'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade',  'unidade' => 'm',  'cor' => '#2563eb', 'bolha' => false ),
+        'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento aparente','unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false ),
+        'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',          'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
+        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',    'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
+    );
+}
+
+/**
+ * A partir de qual instante a velocidade pode ser publicada.
+ *
+ * Devolve o ts do ponto de rota mais recente que já saiu da bolha. Dado
+ * posterior a isso fica oculto, pelo mesmo motivo que a rota recente fica.
+ *
+ * A varredura é limitada: se em 5000 linhas nenhuma estiver fora da bolha,
+ * devolve a mais antiga vista — errar para o lado de esconder mais.
+ */
+function sal_core_corte_velocidade() {
+    global $wpdb;
+    $t = $wpdb->prefix . 'sal_track';
+
+    $celula = sal_core_celula_atual();
+    if ( ! $celula ) {
+        return null;
+    }
+
+    $linhas = $wpdb->get_results(
+        "SELECT ts, lat, lon FROM {$t}
+         WHERE lat IS NOT NULL AND lon IS NOT NULL AND tipo = 'rota'
+         ORDER BY ts DESC, id DESC LIMIT 5000",
+        ARRAY_A
+    );
+    if ( ! $linhas ) {
+        return null;
+    }
+
+    foreach ( $linhas as $linha ) {
+        $c = sal_core_celula( $linha['lat'], $linha['lon'] );
+        if ( max( abs( $c[0] - $celula[0] ), abs( $c[1] - $celula[1] ) ) >= 2 ) {
+            return $linha['ts'];
+        }
+    }
+    return end( $linhas )['ts'];
+}
+
+/**
+ * GET /sal/v1/series — histórico dos sinais vitais.
+ *
+ * Parâmetro `janela`: 24h | 7d | 30d | tudo (padrão 24h).
+ *
+ * Agrega em blocos dimensionados para caber ~240 pontos na tela, qualquer que
+ * seja a janela. Sem isso, 30 dias amostrados a cada minuto seriam 43 mil
+ * pontos no navegador de quem abrir a página pelo celular no meio do mar.
+ */
+function sal_core_get_series( WP_REST_Request $request ) {
+    global $wpdb;
+    $t = $wpdb->prefix . 'sal_track';
+
+    $janelas = array(
+        '24h'  => DAY_IN_SECONDS,
+        '7d'   => 7 * DAY_IN_SECONDS,
+        '30d'  => 30 * DAY_IN_SECONDS,
+        'tudo' => 0,
+    );
+    $janela = (string) $request->get_param( 'janela' );
+    if ( ! isset( $janelas[ $janela ] ) ) {
+        $janela = '24h';
+    }
+
+    $desde_sql = null;
+    if ( $janelas[ $janela ] > 0 ) {
+        $desde_sql = gmdate( 'Y-m-d H:i:s', time() - $janelas[ $janela ] );
+    }
+
+    $onde = "WHERE tipo = 'rota'";
+    if ( $desde_sql ) {
+        $onde .= $wpdb->prepare( ' AND ts >= %s', $desde_sql );
+    }
+
+    $extremos = $wpdb->get_row( "SELECT MIN(ts) AS de, MAX(ts) AS ate FROM {$t} {$onde}", ARRAY_A );
+    if ( empty( $extremos['de'] ) ) {
+        return array( 'janela' => $janela, 'bloco_s' => 0, 'series' => array() );
+    }
+
+    $span  = max( 60, strtotime( $extremos['ate'] . ' UTC' ) - strtotime( $extremos['de'] . ' UTC' ) );
+    $bloco = max( 60, (int) ceil( $span / 240 ) );
+
+    // TIMESTAMPDIFF em vez de UNIX_TIMESTAMP: o segundo interpreta o DATETIME
+    // no fuso da sessão MySQL, e a coluna é UTC. Um servidor com time_zone
+    // diferente deslocaria o gráfico inteiro em silêncio.
+    $epoca = "TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', ts)";
+
+    $metricas = sal_core_metricas();
+    $selects  = array( "FLOOR({$epoca}/{$bloco})*{$bloco} AS bloco" );
+    foreach ( $metricas as $chave => $m ) {
+        $selects[] = "AVG({$m['col']}) AS " . $chave;
+    }
+
+    $linhas = $wpdb->get_results(
+        'SELECT ' . implode( ', ', $selects ) . " FROM {$t} {$onde} GROUP BY bloco ORDER BY bloco ASC",
+        ARRAY_A
+    );
+
+    $corte = sal_core_corte_velocidade();
+    $corte_unix = $corte ? strtotime( $corte . ' UTC' ) : null;
+
+    $series = array();
+    foreach ( $metricas as $chave => $m ) {
+        $pontos = array();
+        $tem    = false;
+        foreach ( $linhas as $linha ) {
+            $v = $linha[ $chave ];
+            if ( $m['bolha'] && $corte_unix !== null && (int) $linha['bloco'] > $corte_unix ) {
+                $v = null;
+            }
+            if ( $v !== null ) {
+                $tem = true;
+                $v   = round( (float) $v, 2 );
+            }
+            $pontos[] = array( (int) $linha['bloco'], $v );
+        }
+        if ( ! $tem ) {
+            continue; // série vazia não vira gráfico vazio
+        }
+        $series[ $chave ] = array(
+            'rotulo'  => $m['rotulo'],
+            'unidade' => $m['unidade'],
+            'cor'     => $m['cor'],
+            'pontos'  => $pontos,
+        );
+    }
+
+    return array(
+        'janela'  => $janela,
+        'bloco_s' => $bloco,
+        'de'      => gmdate( 'c', strtotime( $extremos['de'] . ' UTC' ) ),
+        'ate'     => gmdate( 'c', strtotime( $extremos['ate'] . ' UTC' ) ),
+        'series'  => $series,
+    );
+}
+
+/**
  * GET /sal/v1/last — APOSENTADO.
  *
  * Devolvia `SELECT *` da última linha: lat/lon exatos, sem autenticação, para
@@ -868,14 +1025,31 @@ function sal_core_balance_shortcode( $atts ) {
     wp_enqueue_script( 'sal-core-leaflet' );
     wp_enqueue_script( 'sal-core-balance' );
     wp_localize_script( 'sal-core-balance', 'salBalanco', array(
-        'agora' => esc_url_raw( rest_url( 'sal/v1/agora' ) ),
-        'rota'  => esc_url_raw( rest_url( 'sal/v1/rota' ) ),
+        'agora'  => esc_url_raw( rest_url( 'sal/v1/agora' ) ),
+        'rota'   => esc_url_raw( rest_url( 'sal/v1/rota' ) ),
+        'series' => esc_url_raw( rest_url( 'sal/v1/series' ) ),
     ) );
+
+    $janelas = array( '24h' => '24 h', '7d' => '7 dias', '30d' => '30 dias', 'tudo' => 'Tudo' );
+
     ob_start();
     ?>
     <div class="sal-balanco">
         <div id="sal-balance-map" class="sal-balanco__mapa"></div>
         <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
+
+        <div class="sal-balanco__cartoes" id="sal-balance-cartoes"></div>
+
+        <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
+            <?php foreach ( $janelas as $chave => $rotulo ) : ?>
+                <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
+                    <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
+                    <?php echo esc_html( $rotulo ); ?>
+                </button>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="sal-balanco__graficos" id="sal-balance-graficos"></div>
     </div>
     <?php
     return ob_get_clean();
