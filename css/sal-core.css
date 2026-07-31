@@ -84,6 +84,19 @@
     border: 2px solid var(--sal-border, #e5e7eb);
     border-radius: var(--sal-radius-lg, 12px);
     overflow: hidden;
+
+    /* CONTEXTO DE EMPILHAMENTO PRÓPRIO — não é enfeite.
+     *
+     * O Leaflet usa z-index de 400 (painéis) a 1000 (controles de zoom), e o
+     * header do tema fica em 50. Sem isto o mapa passa POR CIMA do menu ao
+     * rolar a página.
+     *
+     * Subir o z-index do header "resolveria" e seria armadilha: viraria
+     * corrida contra cada z-index do Leaflet e de qualquer embed futuro.
+     * Com position+z-index aqui, tudo que o Leaflet desenha fica preso dentro
+     * desta caixa, e a caixa inteira compete com o header valendo 0. */
+    position: relative;
+    z-index: 0;
 }
 .sal-balanco__mapa {
     height: 380px;
