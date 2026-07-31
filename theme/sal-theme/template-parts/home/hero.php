@@ -38,7 +38,7 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 	<div class="sal-container sal-hero__content">
 
 		<h1 class="sal-hero__title">
-			<?php esc_html_e( 'A vida de quem escolheu o oceâno como lar', 'sal-theme' ); ?>
+			<?php esc_html_e( 'A vida de quem escolheu o oceano como lar', 'sal-theme' ); ?>
 		</h1>
 
 		<p class="sal-hero__subtitle">
