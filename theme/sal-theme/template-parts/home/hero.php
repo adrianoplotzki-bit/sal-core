@@ -42,7 +42,7 @@ $balanco_url = esc_url( home_url( '/balanco' ) );
 		</h1>
 
 		<p class="sal-hero__subtitle">
-			<?php esc_html_e( 'Videos no YouTube que mostram a costa brasileira e nos fazem repensar o jeito que vivemos.', 'sal-theme' ); ?>
+			<?php esc_html_e( 'Vídeos no YouTube que mostram a costa brasileira e nos fazem repensar o jeito que vivemos.', 'sal-theme' ); ?>
 		</p>
 
 		<div class="sal-hero__actions">

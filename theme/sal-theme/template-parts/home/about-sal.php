@@ -2,7 +2,7 @@
 /**
  * Template part: home/about-sal.php
  *
- * Card "O que é o SAL": título, foto, parágrafo introdutório e link
+ * Card "O que é o #SAL": título, foto, parágrafo introdutório e link
  * para a página /quem-somos.
  *
  * @package sal-theme
@@ -15,7 +15,7 @@ $quem_url    = esc_url( home_url( '/quem-somos' ) );
 <section class="sal-about-card">
 
 	<h2 class="sal-section-title sal-about-card__title">
-		<?php esc_html_e( 'O que é o SAL', 'sal-theme' ); ?>
+		<?php esc_html_e( 'O que é o #SAL', 'sal-theme' ); ?>
 	</h2>
 
 	<img
