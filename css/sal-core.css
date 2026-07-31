@@ -264,3 +264,17 @@
     color: var(--sal-body, #1f2937);
     letter-spacing: 0.04em;
 }
+
+/* Inversões de maré, anotadas sobre a curva de profundidade */
+.sal-gr__mare {
+    fill: var(--sal-card, #fff);
+    stroke: var(--sal-ink, #111827);
+    stroke-width: 1.4;
+    vector-effect: non-scaling-stroke;
+}
+.sal-gr__mare-txt {
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 8.5px;
+    fill: var(--sal-ink, #111827);
+    opacity: 0.65;
+}

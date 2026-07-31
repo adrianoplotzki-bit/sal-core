@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.10
+ * Version:     0.11
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,10 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.10' );
+define( 'SAL_CORE_VERSION', '0.11' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
-define( 'SAL_CORE_DB_VERSION', '4' );
+define( 'SAL_CORE_DB_VERSION', '5' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -53,6 +53,8 @@ function sal_core_activate() {
         soc FLOAT NULL,
         ais LONGTEXT NULL,
         depth FLOAT NULL,
+        depth_min FLOAT NULL,
+        depth_max FLOAT NULL,
         water_temp FLOAT NULL,
         estado VARCHAR(24) NULL,
         nome VARCHAR(120) NULL,
@@ -206,7 +208,9 @@ function sal_core_valida_ponto( $data ) {
         'heading'    => array( 0,      360 ),
         'batt'       => array( 0,      200 ),   // volts (margem ampla)
         'soc'        => array( 0,      100 ),   // % de carga — Signal K manda 0..1, converta antes
-        'depth'      => array( 0,      12000 ), // metros
+        'depth'      => array( 0,      12000 ), // metros (média do intervalo)
+        'depth_min'  => array( 0,      12000 ),
+        'depth_max'  => array( 0,      12000 ),
         'water_temp' => array( -5,     60 ),    // °C — Signal K manda kelvin, converta antes
     );
     $clean = array();
@@ -246,6 +250,8 @@ function sal_core_valida_ponto( $data ) {
         'soc'        => $clean['soc'],
         'ais'        => isset( $data['ais'] ) ? wp_json_encode( $data['ais'] ) : null,
         'depth'      => $clean['depth'],
+        'depth_min'  => $clean['depth_min'],
+        'depth_max'  => $clean['depth_max'],
         'water_temp' => $clean['water_temp'],
         'estado'     => isset( $data['estado'] ) ? sanitize_text_field( (string) $data['estado'] ) : null,
         'nome'       => isset( $data['nome'] ) ? sanitize_text_field( (string) $data['nome'] ) : null,
@@ -706,7 +712,8 @@ function sal_core_get_rota( WP_REST_Request $request ) {
 function sal_core_metricas() {
     return array(
         'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false ),
-        'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false ),
+        'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false,
+                                   'col_min' => 'depth_min', 'col_max' => 'depth_max', 'mare' => true ),
         // A faixa min..max transforma "12 nós" em "12 nós, variando de 8 a 19".
         // Num canal de vela a rajada é metade da história; média sozinha a
         // apaga, e é justamente o pico que decide se o dia foi duro.
@@ -715,6 +722,158 @@ function sal_core_metricas() {
         'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',         'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
         'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
     );
+}
+
+/* -------------------------------------------------------------------------
+ * Inversões de maré, deduzidas da própria sondagem
+ * -------------------------------------------------------------------------
+ * Com o barco parado, a série de profundidade É a curva de maré: o fundo não
+ * se move, o nível sim. Os extremos locais dessa curva são a preamar e a
+ * baixamar.
+ *
+ * Por que não vem de uma API de maré: a conta do WorldTides está sem crédito
+ * (confirmado em 2026-07-31, HTTP 400 "Not enough credits"), e qualquer fonte
+ * de maré tem cobertura e datum que variam por região. Deduzir do próprio dado
+ * funciona em qualquer lugar do mundo e não depende de chave nenhuma.
+ *
+ * O que se perde: a altura sobre o datum da carta. O que sai aqui é a
+ * profundidade sob o transdutor no instante da virada, não "1,8 m acima do
+ * nível de redução". São coisas diferentes e o rótulo no site diz qual é.
+ *
+ * SÓ VALE COM O BARCO PARADO. Navegando, a profundidade muda porque o barco
+ * anda sobre o fundo, não porque a maré virou — daí o filtro por velocidade.
+ */
+if ( ! defined( 'SAL_CORE_MARE_JANELA_S' ) ) {
+    define( 'SAL_CORE_MARE_JANELA_S', 2 * HOUR_IN_SECONDS );
+}
+if ( ! defined( 'SAL_CORE_MARE_SEPARACAO_S' ) ) {
+    define( 'SAL_CORE_MARE_SEPARACAO_S', 3 * HOUR_IN_SECONDS );
+}
+// Amplitude mínima entre viradas consecutivas. Abaixo disso é marulho, não
+// maré, e marcar ruído como preamar é pior que não marcar nada.
+if ( ! defined( 'SAL_CORE_MARE_AMPLITUDE_M' ) ) {
+    define( 'SAL_CORE_MARE_AMPLITUDE_M', 0.15 );
+}
+// Acima disso o barco está navegando, e a sondagem deixa de medir maré.
+if ( ! defined( 'SAL_CORE_MARE_SOG_MAX' ) ) {
+    define( 'SAL_CORE_MARE_SOG_MAX', 1.0 );
+}
+
+/**
+ * @param array $serie lista de array( ts_unix, profundidade|null, parado_bool )
+ * @param int   $bloco tamanho do bloco em segundos
+ * @return array lista de array( 'ts' => ..., 'valor' => ..., 'tipo' => 'alta'|'baixa' )
+ */
+function sal_core_inversoes_mare( array $serie, $bloco ) {
+    $n = count( $serie );
+    $k = max( 2, (int) ceil( SAL_CORE_MARE_JANELA_S / max( 1, $bloco ) ) );
+    if ( $n < 2 * $k + 1 ) {
+        return array();
+    }
+
+    // 1) Candidatos: extremo em relação a toda a vizinhança de ±2 h. A
+    //    meia-maré dura ~6 h, então uma janela de 2 h não funde duas viradas.
+    //
+    //    A JANELA PRECISA ESTAR COMPLETA DOS DOIS LADOS. Sem essa exigência,
+    //    o primeiro ponto da série é sempre o menor (ou maior) do que se vê
+    //    dele em diante, e vira uma virada fantasma no início da subida — o
+    //    erro chega a um quarto do período, ~3 h. Foi assim que este bug
+    //    apareceu no teste em 2026-07-31.
+    $cand = array();
+    for ( $i = $k; $i <= $n - 1 - $k; $i++ ) {
+        if ( $serie[ $i ][1] === null || ! $serie[ $i ][2] ) {
+            continue;
+        }
+        $v = $serie[ $i ][1];
+        $eh_max = true;
+        $eh_min = true;
+        $antes = 0;
+        $depois = 0;
+        $piso = $v;
+        $teto = $v;
+
+        for ( $j = $i - $k; $j <= $i + $k; $j++ ) {
+            if ( $j === $i || $serie[ $j ][1] === null || ! $serie[ $j ][2] ) {
+                continue;
+            }
+            if ( $j < $i ) { $antes++; } else { $depois++; }
+            $u = $serie[ $j ][1];
+            if ( $u > $v ) { $eh_max = false; }
+            if ( $u < $v ) { $eh_min = false; }
+            if ( $u < $piso ) { $piso = $u; }
+            if ( $u > $teto ) { $teto = $u; }
+        }
+
+        // Buraco de transmissão ou trecho navegando de um dos lados: não dá
+        // para afirmar que ali houve um extremo.
+        if ( $antes < $k / 2 || $depois < $k / 2 ) {
+            continue;
+        }
+
+        // Proeminência local. Um marulho de 5 cm tem extremos legítimos a
+        // cada poucos minutos; chamá-los de preamar seria pior que não marcar
+        // nada. A maré move a janela inteira, o marulho não.
+        if ( ( $teto - $piso ) < SAL_CORE_MARE_AMPLITUDE_M ) {
+            continue;
+        }
+
+        if ( $eh_max && ! $eh_min ) {
+            $cand[] = array( $serie[ $i ][0], $v, 'alta' );
+        } elseif ( $eh_min && ! $eh_max ) {
+            $cand[] = array( $serie[ $i ][0], $v, 'baixa' );
+        }
+    }
+    if ( ! $cand ) {
+        return array();
+    }
+
+    // 2) Um platô gera vários candidatos seguidos; fica o mais extremo de cada
+    //    aglomerado do mesmo tipo dentro da janela de separação.
+    $agrupado = array();
+    foreach ( $cand as $c ) {
+        $ult = end( $agrupado );
+        if ( $ult && $ult[2] === $c[2] && ( $c[0] - $ult[0] ) < SAL_CORE_MARE_SEPARACAO_S ) {
+            $melhor = ( 'alta' === $c[2] ) ? ( $c[1] > $ult[1] ) : ( $c[1] < $ult[1] );
+            if ( $melhor ) {
+                $agrupado[ count( $agrupado ) - 1 ] = $c;
+            }
+            continue;
+        }
+        $agrupado[] = $c;
+    }
+
+    // 3) Preamar e baixamar se alternam. Duas do mesmo tipo em sequência
+    //    significa que a do meio se perdeu — fica a mais extrema. E a
+    //    diferença entre viradas vizinhas precisa passar da amplitude mínima.
+    $saida = array();
+    foreach ( $agrupado as $c ) {
+        $ult = end( $saida );
+        if ( ! $ult ) {
+            $saida[] = $c;
+            continue;
+        }
+        if ( $ult[2] === $c[2] ) {
+            $melhor = ( 'alta' === $c[2] ) ? ( $c[1] > $ult[1] ) : ( $c[1] < $ult[1] );
+            if ( $melhor ) {
+                $saida[ count( $saida ) - 1 ] = $c;
+            }
+            continue;
+        }
+        if ( abs( $c[1] - $ult[1] ) < SAL_CORE_MARE_AMPLITUDE_M ) {
+            continue;
+        }
+        $saida[] = $c;
+    }
+
+    $marcas = array();
+    foreach ( $saida as $c ) {
+        $marcas[] = array(
+            'ts'    => $c[0],
+            'valor' => round( $c[1], 2 ),
+            'tipo'  => $c[2],
+        );
+    }
+    return $marcas;
 }
 
 /**
@@ -814,6 +973,9 @@ function sal_core_get_series( WP_REST_Request $request ) {
             $selects[] = "MAX({$m['col_max']}) AS {$chave}__max";
         }
     }
+    // Velocidade máxima do bloco: é o que diz se o barco estava parado, e só
+    // parado a sondagem mede maré em vez de relevo do fundo.
+    $selects[] = 'MAX(sog) AS __sog_max';
 
     $linhas = $wpdb->get_results(
         'SELECT ' . implode( ', ', $selects ) . " FROM {$t} {$onde} GROUP BY bloco ORDER BY bloco ASC",
@@ -869,6 +1031,24 @@ function sal_core_get_series( WP_REST_Request $request ) {
         if ( $tem_faixa ) {
             $serie['faixa'] = $faixa;
         }
+
+        if ( ! empty( $m['mare'] ) ) {
+            $bruta = array();
+            foreach ( $linhas as $linha ) {
+                $parado = ( $linha['__sog_max'] === null )
+                    || ( (float) $linha['__sog_max'] < SAL_CORE_MARE_SOG_MAX );
+                $bruta[] = array(
+                    (int) $linha['bloco'],
+                    $linha[ $chave ] === null ? null : (float) $linha[ $chave ],
+                    $parado,
+                );
+            }
+            $marcas = sal_core_inversoes_mare( $bruta, $bloco );
+            if ( $marcas ) {
+                $serie['marcas'] = $marcas;
+            }
+        }
+
         $series[ $chave ] = $serie;
     }
 

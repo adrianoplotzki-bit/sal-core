@@ -278,6 +278,24 @@
               '" fill-opacity="0.16" stroke="none"/>'
             : '<path d="' + dArea.trim() + '" fill="url(#' + id + ')" stroke="none"/>';
 
+        // Inversões de maré: ponto pequeno na curva, seta de sentido e o valor.
+        // Discreto de propósito — é anotação sobre a série, não uma segunda
+        // série competindo com ela.
+        var dMarcas = '';
+        if (serie.marcas) {
+            serie.marcas.forEach(function (mc) {
+                if (mc.ts < t0 || mc.ts > t1) { return; }
+                var x = px(mc.ts), y = py(mc.valor);
+                var alta = mc.tipo === 'alta';
+                var dy = alta ? -7 : 13;
+                dMarcas += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) +
+                    '" r="2.6" class="sal-gr__mare"/>' +
+                    '<text x="' + x.toFixed(1) + '" y="' + (y + dy).toFixed(1) +
+                    '" class="sal-gr__mare-txt" text-anchor="middle">' +
+                    (alta ? '▲' : '▼') + ' ' + mc.valor + '</text>';
+            });
+        }
+
         var resumo = '';
         if (faixas.length) {
             var todos = [];
@@ -300,6 +318,7 @@
             grade + marcas + fundo +
             '<path d="' + dLinha.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
             '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+            dMarcas +
             '</svg></figure>';
     }
 
