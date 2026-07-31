@@ -2,8 +2,8 @@
 /**
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
- * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e endpoint de sinalização (SignalK).
- * Version:     0.5
+ * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
+ * Version:     0.6.1
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -170,14 +170,6 @@ function sal_core_valid_num( $v, $min = null, $max = null ) {
     return $f;
 }
 
-/**
- * Processa os dados JSON enviados do barco. Cada campo numérico é validado
- * dentro de um intervalo plausível; valores fora do intervalo fazem o request
- * falhar com 400 para evitar lixo na base.
- *
- * @param WP_REST_Request $request
- * @return array|WP_REST_Response
- */
 // Teto de pontos por requisição. Um barco offline por dias sobe o buffer
 // inteiro de uma vez; o teto evita que uma requisição só derrube o PHP-FPM.
 if ( ! defined( 'SAL_CORE_LOTE_MAX' ) ) {
