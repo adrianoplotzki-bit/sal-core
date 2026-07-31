@@ -30,6 +30,11 @@
     var INTERVALO_PESADO = 5 * 60 * 1000;
     var janelaAtual = '24h';
     var ultimoAgora = null, ultimaRota = null, chaveEnquadrada = null;
+    var falhasSeguidas = 0, ultimaBusca = 0;
+
+    // Depois de tantas falhas seguidas em /agora, o painel avisa. Três
+    // minutos de silêncio: menos que isso pisca à toa em rede de celular.
+    var FALHAS_PARA_AVISAR = 3;
 
     var ESTADOS = {
         moored: 'atracado',
@@ -457,8 +462,19 @@
         });
     }
 
+    // Falha de rede NÃO apaga o que já está na tela. Antes, um soluço de
+    // sinal zerava cartões e mapa até o ciclo seguinte — a página parecia
+    // quebrada por um minuto inteiro. Dado velho visível é melhor que tela
+    // em branco, desde que a página diga que está velho.
     function cicloVivo() {
+        ultimaBusca = Date.now();
         return buscar(cfg.agora).then(function (agora) {
+            if (!agora) {
+                falhasSeguidas++;
+                if (falhasSeguidas >= FALHAS_PARA_AVISAR) { marcarDesatualizado(); }
+                return;
+            }
+            falhasSeguidas = 0;
             ultimoAgora = agora;
             desenharCartoes(agora);
             desenharMapa(agora, ultimaRota);
@@ -467,11 +483,28 @@
 
     function cicloPesado() {
         buscar(cfg.rota).then(function (rota) {
+            if (!rota) { return; }
             ultimaRota = rota;
             desenharMapa(ultimoAgora, rota);
         });
         carregarSeries();
     }
+
+    function marcarDesatualizado() {
+        if (!elEstado || /sem conexão/.test(elEstado.textContent)) { return; }
+        elEstado.textContent = texto(ultimoAgora) +
+            ' Os dados podem estar desatualizados: sem conexão com o servidor.';
+    }
+
+    // Navegador estrangula (e às vezes congela) temporizador de aba em
+    // segundo plano. Sem isto, voltar para a aba mostra o painel parado no
+    // tempo até o próximo tique — que pode demorar minutos.
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) { return; }
+        if (Date.now() - ultimaBusca < 20000) { return; }   // não martelar ao alternar abas
+        cicloVivo();
+        if (Date.now() - ultimaBusca > INTERVALO_PESADO) { cicloPesado(); }
+    });
 
     cicloVivo();
     cicloPesado();
