@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e endpoint de sinalização (SignalK).
- * Version:     0.4
+ * Version:     0.5
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.4' );
+define( 'SAL_CORE_VERSION', '0.5' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -53,11 +53,12 @@ function sal_core_activate() {
 register_activation_hook( __FILE__, 'sal_core_activate' );
 
 /**
- * Regista rotas REST personalizadas para ingestão de dados e para
- * disponibilizar o último ponto (usado pelo dashboard em tempo real).
+ * Regista as rotas REST: ingestão de dados do barco e as duas leituras
+ * públicas do painel.
  *
- * O endpoint /sk (ingestão) exige autenticação via header X-SAL-API-Key.
- * O endpoint /last permanece público (consumido pelo dashboard front-end).
+ * /sk (ingestão) exige autenticação via header X-SAL-API-Key. /agora e /rota
+ * são públicas mas passam pela regra da bolha — nenhuma delas devolve a
+ * posição atual do barco. Ver o bloco "POSIÇÃO PÚBLICA" mais abaixo.
  */
 function sal_core_register_rest() {
     register_rest_route( 'sal/v1', '/sk', array(
@@ -65,6 +66,19 @@ function sal_core_register_rest() {
         'callback' => 'sal_core_handle_sk_data',
         'permission_callback' => 'sal_core_sk_permission_check',
     ) );
+    // Posição vaga do momento + vitais que não localizam.
+    register_rest_route( 'sal/v1', '/agora', array(
+        'methods'  => 'GET',
+        'callback' => 'sal_core_get_agora',
+        'permission_callback' => '__return_true',
+    ) );
+    // Rota já percorrida, precisa, fora da bolha.
+    register_rest_route( 'sal/v1', '/rota', array(
+        'methods'  => 'GET',
+        'callback' => 'sal_core_get_rota',
+        'permission_callback' => '__return_true',
+    ) );
+    // Aposentado — ver sal_core_get_last_point().
     register_rest_route( 'sal/v1', '/last', array(
         'methods'  => 'GET',
         'callback' => 'sal_core_get_last_point',
@@ -191,23 +205,344 @@ function sal_core_handle_sk_data( WP_REST_Request $request ) {
         'src'        => isset( $data['src'] ) ? sanitize_text_field( (string) $data['src'] ) : null,
     );
     $wpdb->insert( $table_name, $row );
+
+    // A histerese da célula publicada é atualizada aqui, na escrita, e nunca
+    // nos endpoints públicos — leitor concorrente não pode alterar estado.
+    sal_core_atualiza_celula( $clean['lat'], $clean['lon'] );
+
     return array( 'ok' => true, 'id' => $wpdb->insert_id );
 }
 
-/**
- * Devolve o último ponto armazenado na tabela sal_track. Se não houver
- * dados, retorna 404.
+/* =========================================================================
+ * POSIÇÃO PÚBLICA — a "regra da bolha"
+ * =========================================================================
  *
- * @return array|
+ * O banco guarda a posição SEMPRE precisa. Quem decide o que é público é a
+ * leitura, nunca a gravação — senão o histórico preciso se perde para sempre.
+ *
+ * A regra inteira sai de uma primitiva só: a CÉLULA de uma grade fixa de
+ * ~110 km, com deslocamento secreto (sal_core_grade_offset).
+ *
+ *   Onde estou  → a célula atual. Nome do lugar + círculo. Sem lat/lon.
+ *   Onde passei → todo ponto cuja célula dista >= 2 células da atual.
+ *
+ * Por que célula e não "círculo de 100 km em volta de mim":
+ *
+ *  1. Um círculo centrado em você TEM você no centro. Publicar o centro é
+ *     publicar a posição, só que embrulhada.
+ *  2. Parado no mesmo fundeadouro por duas semanas, a célula publicada é
+ *     idêntida byte a byte todo dia — repetição não acrescenta informação.
+ *     Um círculo que acompanha o barco gera um dado novo a cada amostra, e a
+ *     interseção das amostras estreita a posição.
+ *  3. Se a rota apenas parasse a 100 km de você, o ponto final dela traçaria
+ *     um arco ao seu redor. Vários finais se cruzam e te localizam. A grade
+ *     quantiza esse limite e mata o ataque.
+ *
+ * Efeito colateral desejado: voltar a um lugar já publicado o esconde de
+ * novo, automaticamente, porque a bolha anda junto com o barco.
+ */
+
+// Lado da célula em graus. 1.0° ≈ 110 km de norte a sul; em longitude varia
+// com o cosseno da latitude (~110 km no equador, ~92 km em -34°). O círculo
+// que cobre a célula tem raio de ~78 km.
+if ( ! defined( 'SAL_CORE_CELULA_GRAUS' ) ) {
+    define( 'SAL_CORE_CELULA_GRAUS', 1.0 );
+}
+
+// Histerese: só troca a célula publicada quando o barco está pelo menos isto
+// para dentro da nova. Sem margem, ficar em cima de uma divisa faz a célula
+// oscilar — e a oscilação revela a divisa, que é uma linha, não uma área.
+if ( ! defined( 'SAL_CORE_MARGEM_GRAUS' ) ) {
+    define( 'SAL_CORE_MARGEM_GRAUS', 0.15 );
+}
+
+// Sem ponto novo por este tempo, o barco é considerado fora do ar.
+if ( ! defined( 'SAL_CORE_SILENCIO_HORAS' ) ) {
+    define( 'SAL_CORE_SILENCIO_HORAS', 6 );
+}
+
+/**
+ * Deslocamento secreto da grade, sorteado uma vez e guardado.
+ *
+ * Sem ele as divisas seriam números redondos e portanto adivinháveis: quem
+ * soubesse onde elas caem saberia, ao ver a célula trocar, que o barco
+ * acabou de cruzar uma linha conhecida.
+ */
+function sal_core_grade_offset() {
+    $off = get_option( 'sal_core_grade_offset' );
+    if ( is_array( $off ) && count( $off ) === 2 ) {
+        return array( (float) $off[0], (float) $off[1] );
+    }
+    $off = array(
+        wp_rand( 0, 999999 ) / 1000000 * SAL_CORE_CELULA_GRAUS,
+        wp_rand( 0, 999999 ) / 1000000 * SAL_CORE_CELULA_GRAUS,
+    );
+    update_option( 'sal_core_grade_offset', $off, false );
+    return $off;
+}
+
+/**
+ * Índice da célula que contém o ponto. Devolve array( i_lat, i_lon ).
+ */
+function sal_core_celula( $lat, $lon ) {
+    $off = sal_core_grade_offset();
+    return array(
+        (int) floor( ( (float) $lat - $off[0] ) / SAL_CORE_CELULA_GRAUS ),
+        (int) floor( ( (float) $lon - $off[1] ) / SAL_CORE_CELULA_GRAUS ),
+    );
+}
+
+/**
+ * Centro geométrico da célula — a única coordenada que sai para o público.
+ * Não carrega nenhuma informação sobre onde dentro da célula o barco está.
+ */
+function sal_core_celula_centro( array $celula ) {
+    $off = sal_core_grade_offset();
+    return array(
+        ( $celula[0] + 0.5 ) * SAL_CORE_CELULA_GRAUS + $off[0],
+        ( $celula[1] + 0.5 ) * SAL_CORE_CELULA_GRAUS + $off[1],
+    );
+}
+
+/**
+ * Raio, em km, do círculo que cobre a célula (semi-diagonal).
+ */
+function sal_core_celula_raio_km( array $celula ) {
+    $centro = sal_core_celula_centro( $celula );
+    $alt_lat = SAL_CORE_CELULA_GRAUS * 110.574;
+    $alt_lon = SAL_CORE_CELULA_GRAUS * 111.320 * cos( deg2rad( $centro[0] ) );
+    return round( sqrt( pow( $alt_lat / 2, 2 ) + pow( $alt_lon / 2, 2 ) ) );
+}
+
+/**
+ * Atualiza a célula publicada aplicando histerese. Chamada só na INGESTÃO —
+ * endpoint público nunca escreve estado, para não haver corrida entre
+ * leitores concorrentes.
+ */
+function sal_core_atualiza_celula( $lat, $lon ) {
+    if ( $lat === null || $lon === null ) {
+        return;
+    }
+    $nova  = sal_core_celula( $lat, $lon );
+    $atual = get_option( 'sal_core_celula_publicada' );
+
+    if ( ! is_array( $atual ) || count( $atual ) !== 2 ) {
+        update_option( 'sal_core_celula_publicada', $nova, false );
+        return;
+    }
+    if ( (int) $atual[0] === $nova[0] && (int) $atual[1] === $nova[1] ) {
+        return;
+    }
+
+    // Distância do ponto à borda mais próxima da célula nova.
+    $off  = sal_core_grade_offset();
+    $d_lat = (float) $lat - ( $nova[0] * SAL_CORE_CELULA_GRAUS + $off[0] );
+    $d_lon = (float) $lon - ( $nova[1] * SAL_CORE_CELULA_GRAUS + $off[1] );
+    $dentro = min(
+        $d_lat, SAL_CORE_CELULA_GRAUS - $d_lat,
+        $d_lon, SAL_CORE_CELULA_GRAUS - $d_lon
+    );
+    if ( $dentro < SAL_CORE_MARGEM_GRAUS ) {
+        return; // ainda colado na divisa: mantém a célula antiga
+    }
+    update_option( 'sal_core_celula_publicada', $nova, false );
+}
+
+/**
+ * Célula atual, em modo somente leitura. Cai para o cálculo direto a partir
+ * do último ponto quando a option ainda não existe (base recém-populada).
+ */
+function sal_core_celula_atual() {
+    $atual = get_option( 'sal_core_celula_publicada' );
+    if ( is_array( $atual ) && count( $atual ) === 2 ) {
+        return array( (int) $atual[0], (int) $atual[1] );
+    }
+    $ultimo = sal_core_ultimo_ponto();
+    if ( ! $ultimo || $ultimo['lat'] === null || $ultimo['lon'] === null ) {
+        return null;
+    }
+    return sal_core_celula( $ultimo['lat'], $ultimo['lon'] );
+}
+
+/**
+ * Último ponto COM posição (bruto, uso interno — nunca devolvido ao público).
+ */
+function sal_core_ultimo_ponto() {
+    global $wpdb;
+    $t = $wpdb->prefix . 'sal_track';
+    return $wpdb->get_row(
+        "SELECT * FROM {$t} WHERE lat IS NOT NULL AND lon IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1",
+        ARRAY_A
+    );
+}
+
+/**
+ * Nome legível da célula, via geocodificação reversa do CENTRO da célula.
+ *
+ * Repare que quem é geocodificado é o centro, nunca o barco: pedir o nome da
+ * posição real entregaria a coordenada exata ao serviço de terceiro em troca
+ * de um nome aproximado. Resultado fica em transient, porque a célula muda
+ * raramente. Falha em silêncio — nome é enfeite, não pode derrubar a rota.
+ */
+function sal_core_nome_da_celula( array $celula ) {
+    $chave = 'sal_nome_' . $celula[0] . '_' . $celula[1];
+    $cache = get_transient( $chave );
+    if ( $cache !== false ) {
+        return $cache === '-' ? null : $cache;
+    }
+
+    $centro = sal_core_celula_centro( $celula );
+    $resp = wp_remote_get(
+        add_query_arg(
+            array(
+                'lat'             => round( $centro[0], 4 ),
+                'lon'             => round( $centro[1], 4 ),
+                'format'          => 'json',
+                'zoom'            => 8,
+                'accept-language' => 'pt-BR',
+            ),
+            'https://nominatim.openstreetmap.org/reverse'
+        ),
+        array(
+            'timeout'    => 8,
+            'user-agent' => 'HashtagSal/1.0 (+https://hashtagsal.com.br)',
+        )
+    );
+
+    $nome = null;
+    if ( ! is_wp_error( $resp ) && 200 === wp_remote_retrieve_response_code( $resp ) ) {
+        $dados = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( isset( $dados['address'] ) && is_array( $dados['address'] ) ) {
+            $a = $dados['address'];
+            foreach ( array( 'city', 'town', 'municipality', 'county', 'state_district', 'state' ) as $campo ) {
+                if ( ! empty( $a[ $campo ] ) ) {
+                    $nome = (string) $a[ $campo ];
+                    break;
+                }
+            }
+            if ( $nome && ! empty( $a['state'] ) && $nome !== $a['state'] ) {
+                $nome .= ' – ' . $a['state'];
+            }
+        }
+    }
+    set_transient( $chave, $nome === null ? '-' : $nome, 30 * DAY_IN_SECONDS );
+    return $nome;
+}
+
+/**
+ * GET /sal/v1/agora — onde o barco está, de forma deliberadamente vaga.
+ *
+ * Não devolve lat/lon do barco, não devolve rumo e não devolve velocidade:
+ * rumo e velocidade, integrados a partir do último ponto público, reconstroem
+ * a posição por navegação estimada. Só saem daqui grandezas que não localizam.
+ * O timestamp é arredondado para a hora — "atualizado há 2 minutos", somado à
+ * célula, seria por si só um canal de rastreamento.
+ */
+function sal_core_get_agora() {
+    $ultimo = sal_core_ultimo_ponto();
+    if ( ! $ultimo ) {
+        return array( 'transmitindo' => false, 'area' => null );
+    }
+
+    $celula = sal_core_celula_atual();
+    if ( ! $celula ) {
+        return array( 'transmitindo' => false, 'area' => null );
+    }
+    $centro = sal_core_celula_centro( $celula );
+
+    $visto_em = strtotime( $ultimo['ts'] . ' UTC' );
+    $silencio = ( time() - $visto_em ) > ( SAL_CORE_SILENCIO_HORAS * HOUR_IN_SECONDS );
+
+    $vitais = array();
+    foreach ( array( 'depth' => 'profundidade_m', 'aws' => 'vento_no', 'batt' => 'bateria_v' ) as $col => $rotulo ) {
+        if ( isset( $ultimo[ $col ] ) && $ultimo[ $col ] !== null ) {
+            $vitais[ $rotulo ] = round( (float) $ultimo[ $col ], 1 );
+        }
+    }
+
+    return array(
+        'transmitindo'  => ! $silencio,
+        'atualizado_em' => gmdate( 'Y-m-d\TH:00:00\Z', $visto_em ),
+        'area'          => array(
+            'lat'     => round( $centro[0], 4 ),
+            'lon'     => round( $centro[1], 4 ),
+            'raio_km' => sal_core_celula_raio_km( $celula ),
+            'nome'    => sal_core_nome_da_celula( $celula ),
+        ),
+        'vitais'        => $vitais,
+    );
+}
+
+/**
+ * GET /sal/v1/rota — os lugares por onde o barco já passou, precisos.
+ *
+ * Precisos porque já foram deixados para trás: só sai o que está a duas
+ * células ou mais da atual, o que garante pelo menos uma célula inteira
+ * (~110 km) de separação. O filtro roda a cada leitura, então voltar a um
+ * lugar já publicado o esconde de novo sem ninguém precisar marcar nada.
+ */
+function sal_core_get_rota( WP_REST_Request $request ) {
+    global $wpdb;
+    $t = $wpdb->prefix . 'sal_track';
+
+    $limite = (int) $request->get_param( 'limite' );
+    $limite = ( $limite > 0 && $limite <= 5000 ) ? $limite : 2000;
+
+    $linhas = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT ts, lat, lon, sog, cog FROM {$t}
+             WHERE lat IS NOT NULL AND lon IS NOT NULL
+             ORDER BY ts ASC, id ASC LIMIT %d",
+            $limite
+        ),
+        ARRAY_A
+    );
+
+    $celula = sal_core_celula_atual();
+    $pontos = array();
+    $ocultos = 0;
+
+    foreach ( $linhas as $linha ) {
+        if ( $celula ) {
+            $c = sal_core_celula( $linha['lat'], $linha['lon'] );
+            if ( max( abs( $c[0] - $celula[0] ), abs( $c[1] - $celula[1] ) ) < 2 ) {
+                $ocultos++;
+                continue;
+            }
+        }
+        $pontos[] = array(
+            'ts'  => gmdate( 'c', strtotime( $linha['ts'] . ' UTC' ) ),
+            'lat' => round( (float) $linha['lat'], 5 ),
+            'lon' => round( (float) $linha['lon'], 5 ),
+            'sog' => $linha['sog'] === null ? null : round( (float) $linha['sog'], 1 ),
+        );
+    }
+
+    // "ocultos" é honestidade: diz ao leitor que o mapa está incompleto de
+    // propósito, em vez de deixá-lo achar que a rota acabou ali.
+    return array( 'pontos' => $pontos, 'ocultos' => $ocultos );
+}
+
+/**
+ * GET /sal/v1/last — APOSENTADO.
+ *
+ * Devolvia `SELECT *` da última linha: lat/lon exatos, sem autenticação, para
+ * qualquer um. Enquanto a tabela só tinha a linha semente de teste isso era
+ * inofensivo; com dado real seria transmissão de posição ao vivo, passando por
+ * cima de toda a regra acima. E como devolvia a linha inteira, qualquer coluna
+ * nova vazaria sozinha, sem ninguém decidir nada.
+ *
+ * Fica como 410 em vez de sumir: se algo ainda chamar, aparece no log como
+ * chamada explícita a uma rota aposentada, não como um 404 anônimo.
  */
 function sal_core_get_last_point() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'sal_track';
-    $row = $wpdb->get_row( "SELECT * FROM {$table_name} ORDER BY ts DESC, id DESC LIMIT 1", ARRAY_A );
-    if ( ! $row ) {
-        return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Sem dados' ), 404 );
-    }
-    return $row;
+    return new WP_REST_Response(
+        array(
+            'status'  => 'gone',
+            'message' => 'Endpoint aposentado por privacidade. Use /sal/v1/agora e /sal/v1/rota.',
+        ),
+        410
+    );
 }
 
 /**
@@ -220,8 +555,7 @@ function sal_core_enqueue_assets() {
     // Prepare scripts para balanço; eles serão enfileirados apenas quando o shortcode é usado.
     wp_register_style( 'sal-core-leaflet', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', array(), '1.9.4' );
     wp_register_script( 'sal-core-leaflet', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true );
-    wp_register_script( 'sal-core-chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', array(), '4', true );
-    wp_register_script( 'sal-core-balance', SAL_CORE_URL . 'js/balance.js', array( 'jquery', 'sal-core-leaflet', 'sal-core-chartjs' ), SAL_CORE_VERSION, true );
+    wp_register_script( 'sal-core-balance', SAL_CORE_URL . 'js/balance.js', array( 'sal-core-leaflet' ), SAL_CORE_VERSION, true );
 }
 add_action( 'wp_enqueue_scripts', 'sal_core_enqueue_assets' );
 
@@ -368,21 +702,28 @@ function sal_core_plugin_action_links( $links ) {
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'sal_core_plugin_action_links' );
 
 /**
- * Shortcode para o dashboard de balanço. Carrega Leaflet e Chart.js,
- * localiza a URL do endpoint /last e insere contêineres para mapa e gráfico.
+ * Shortcode do painel do Balanço: mapa com a área aproximada do momento e a
+ * rota já percorrida.
+ *
+ * O gráfico de velocidade saiu junto com o Chart.js. Velocidade ao vivo,
+ * integrada a partir do último ponto público, reconstrói a posição — e o
+ * Chart.js vinha de CDN sem versão fixada, o que é risco de cadeia de
+ * suprimentos por um gráfico que não podíamos publicar de qualquer forma.
  */
 function sal_core_balance_shortcode( $atts ) {
-    // Garante que os scripts necessários são enfileirados.
     wp_enqueue_style( 'sal-core-leaflet' );
     wp_enqueue_script( 'sal-core-leaflet' );
-    wp_enqueue_script( 'sal-core-chartjs' );
     wp_enqueue_script( 'sal-core-balance' );
-    // Passa a URL do endpoint via localize.
-    wp_localize_script( 'sal-core-balance', 'salCore', array( 'restLast' => esc_url_raw( rest_url( 'sal/v1/last' ) ) ) );
+    wp_localize_script( 'sal-core-balance', 'salBalanco', array(
+        'agora' => esc_url_raw( rest_url( 'sal/v1/agora' ) ),
+        'rota'  => esc_url_raw( rest_url( 'sal/v1/rota' ) ),
+    ) );
     ob_start();
     ?>
-    <div id="sal-balance-map" style="height:360px;margin:1rem 0;"></div>
-    <canvas id="sal-balance-speed" style="width:100%;height:200px;"></canvas>
+    <div class="sal-balanco">
+        <div id="sal-balance-map" class="sal-balanco__mapa"></div>
+        <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
+    </div>
     <?php
     return ob_get_clean();
 }

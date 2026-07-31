@@ -63,3 +63,19 @@
     margin-right: 8px;
     padding: 6px;
 }
+
+/* Painel do Balanço (shortcode [sal_balance]) */
+.sal-balanco {
+    margin: 1rem 0 1.5rem;
+}
+.sal-balanco__mapa {
+    height: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.sal-balanco__estado {
+    margin: 10px 0 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
