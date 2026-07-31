@@ -19,9 +19,20 @@
     }
 
     var INTERVALO = 5 * 60 * 1000; // a célula muda raramente; 30s não faria sentido
+    var ESTADOS = {
+        moored: 'atracado',
+        anchored: 'fundeado',
+        sailing: 'navegando à vela',
+        motoring: 'navegando a motor',
+        'motor sailing': 'a vela e motor',
+        driving: 'navegando',
+        'not under command': 'sem governo'
+    };
+
     var mapa = L.map(el, { scrollWheelZoom: false }).setView([-15, -40], 4);
     var camadaArea = null;
     var camadaRota = null;
+    var camadaLugares = null;
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -42,8 +53,10 @@
         }
         var partes = [];
         var onde = agora.area.nome ? ('perto de ' + agora.area.nome) : 'em algum ponto desta área';
+        var estado = ESTADOS[agora.estado] || null;
         partes.push(
             (agora.transmitindo ? 'Agora: ' : 'Última posição conhecida: ') +
+            (estado ? estado + ', ' : '') +
             onde + ' — posição aproximada, num raio de ' + agora.area.raio_km + ' km.'
         );
 
@@ -51,6 +64,7 @@
         var vitais = [];
         if (typeof v.profundidade_m === 'number') { vitais.push(v.profundidade_m + ' m de profundidade'); }
         if (typeof v.vento_no === 'number') { vitais.push(v.vento_no + ' nós de vento'); }
+        if (typeof v.agua_c === 'number') { vitais.push('água a ' + v.agua_c + ' °C'); }
         if (typeof v.bateria_v === 'number') { vitais.push(v.bateria_v + ' V nas baterias'); }
         if (vitais.length) { partes.push(vitais.join(' · ')); }
 
@@ -65,11 +79,27 @@
 
         if (camadaArea) { mapa.removeLayer(camadaArea); camadaArea = null; }
         if (camadaRota) { mapa.removeLayer(camadaRota); camadaRota = null; }
+        if (camadaLugares) { mapa.removeLayer(camadaLugares); camadaLugares = null; }
 
         if (rota && rota.pontos && rota.pontos.length) {
             var coords = rota.pontos.map(function (p) { return [p.lat, p.lon]; });
             camadaRota = L.polyline(coords, { color: '#2563eb', weight: 3, opacity: 0.85 }).addTo(mapa);
             limites = limites.concat(coords);
+        }
+
+        // Lugares são pontos avulsos: círculos nomeados, nunca ligados por
+        // linha. A ordem em que aparecem no banco não é a ordem em que foram
+        // visitados, então qualquer linha entre eles seria ficção.
+        if (rota && rota.lugares && rota.lugares.length) {
+            camadaLugares = L.layerGroup(rota.lugares.map(function (lugar) {
+                var m = L.circleMarker([lugar.lat, lugar.lon], {
+                    radius: 5, color: '#f59e0b', weight: 2,
+                    fillColor: '#f59e0b', fillOpacity: 0.9
+                });
+                if (lugar.nome) { m.bindPopup(lugar.nome); }
+                limites.push([lugar.lat, lugar.lon]);
+                return m;
+            })).addTo(mapa);
         }
 
         if (agora && agora.area) {
@@ -84,8 +114,10 @@
         }
 
         if (limites.length) {
-            var caixa = camadaArea ? camadaArea.getBounds() : L.latLngBounds(limites);
-            if (camadaRota) { caixa = caixa.extend(camadaRota.getBounds()); }
+            var caixa = L.latLngBounds(limites);
+            // Estende pelo círculo inteiro, não só pelo centro dele: senão o
+            // enquadramento cortaria metade da área publicada.
+            if (camadaArea) { caixa = caixa.extend(camadaArea.getBounds()); }
             mapa.fitBounds(caixa, { padding: [24, 24] });
         }
 

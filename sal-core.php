@@ -17,7 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.5' );
+define( 'SAL_CORE_VERSION', '0.6' );
+// Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
+// sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
+define( 'SAL_CORE_DB_VERSION', '2' );
 define( 'SAL_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAL_CORE_URL', plugin_dir_url( __FILE__ ) );
 
@@ -29,6 +32,10 @@ function sal_core_activate() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     $table_name      = $wpdb->prefix . 'sal_track';
+
+    // src é NOT NULL de propósito: em MySQL, dois NULL são considerados
+    // distintos, então UNIQUE (ts, src) não barraria nada se src pudesse ser
+    // nulo — e a idempotência do reenvio em lote depende dessa chave.
     $sql = "CREATE TABLE {$table_name} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         ts DATETIME NOT NULL,
@@ -43,14 +50,37 @@ function sal_core_activate() {
         batt FLOAT NULL,
         ais LONGTEXT NULL,
         depth FLOAT NULL,
-        src VARCHAR(32) NULL,
+        water_temp FLOAT NULL,
+        estado VARCHAR(24) NULL,
+        nome VARCHAR(120) NULL,
+        tipo VARCHAR(16) NOT NULL DEFAULT 'rota',
+        visivel TINYINT(1) NOT NULL DEFAULT 1,
+        src VARCHAR(32) NOT NULL DEFAULT 'desconhecido',
         PRIMARY KEY  (id),
-        KEY ts (ts)
+        UNIQUE KEY ts_src (ts,src),
+        KEY ts (ts),
+        KEY tipo (tipo)
     ) {$charset_collate};";
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
+    update_option( 'sal_core_db_version', SAL_CORE_DB_VERSION );
 }
 register_activation_hook( __FILE__, 'sal_core_activate' );
+
+/**
+ * Migração de schema sem depender de reativar o plugin.
+ *
+ * O deploy é por SFTP: o arquivo troca, mas nada reativa o plugin, então o
+ * register_activation_hook NUNCA dispara em produção. Sem isto, colunas novas
+ * simplesmente não apareceriam e a gravação falharia em silêncio.
+ */
+function sal_core_maybe_upgrade() {
+    if ( version_compare( (string) get_option( 'sal_core_db_version', '0' ), SAL_CORE_DB_VERSION, '>=' ) ) {
+        return;
+    }
+    sal_core_activate();
+}
+add_action( 'plugins_loaded', 'sal_core_maybe_upgrade' );
 
 /**
  * Regista as rotas REST: ingestão de dados do barco e as duas leituras
@@ -148,13 +178,20 @@ function sal_core_valid_num( $v, $min = null, $max = null ) {
  * @param WP_REST_Request $request
  * @return array|WP_REST_Response
  */
-function sal_core_handle_sk_data( WP_REST_Request $request ) {
-    $data = $request->get_json_params();
-    if ( empty( $data ) || ! is_array( $data ) ) {
-        return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Payload vazio' ), 400 );
+// Teto de pontos por requisição. Um barco offline por dias sobe o buffer
+// inteiro de uma vez; o teto evita que uma requisição só derrube o PHP-FPM.
+if ( ! defined( 'SAL_CORE_LOTE_MAX' ) ) {
+    define( 'SAL_CORE_LOTE_MAX', 5000 );
+}
+
+/**
+ * Valida e normaliza UM ponto. Devolve a linha pronta ou uma string de erro.
+ */
+function sal_core_valida_ponto( $data ) {
+    if ( ! is_array( $data ) ) {
+        return 'ponto não é um objeto';
     }
 
-    // Validação por campo (cada um pode ser null se ausente).
     $fields = array(
         'lat'        => array( -90,    90 ),
         'lon'        => array( -180,   180 ),
@@ -166,30 +203,30 @@ function sal_core_handle_sk_data( WP_REST_Request $request ) {
         'heading'    => array( 0,      360 ),
         'batt'       => array( 0,      200 ),   // volts (margem ampla)
         'depth'      => array( 0,      12000 ), // metros
+        'water_temp' => array( -5,     60 ),    // °C — Signal K manda kelvin, converta antes
     );
     $clean = array();
     foreach ( $fields as $name => $range ) {
         $v = sal_core_valid_num( isset( $data[ $name ] ) ? $data[ $name ] : null, $range[0], $range[1] );
         if ( $v === false ) {
-            return new WP_REST_Response( array( 'status' => 'error', 'message' => "Campo {$name} fora do intervalo válido" ), 400 );
+            return "campo {$name} fora do intervalo válido";
         }
         $clean[ $name ] = $v;
     }
 
-    // Timestamp.
     if ( isset( $data['ts'] ) ) {
         $ts_unix = strtotime( (string) $data['ts'] );
         if ( ! $ts_unix ) {
-            return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Campo ts inválido' ), 400 );
+            return 'campo ts inválido';
         }
         $ts = gmdate( 'Y-m-d H:i:s', $ts_unix );
     } else {
         $ts = current_time( 'mysql', 1 );
     }
 
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'sal_track';
-    $row = array(
+    $tipo = isset( $data['tipo'] ) && 'lugar' === $data['tipo'] ? 'lugar' : 'rota';
+
+    return array(
         'ts'         => $ts,
         'lat'        => $clean['lat'],
         'lon'        => $clean['lon'],
@@ -202,15 +239,94 @@ function sal_core_handle_sk_data( WP_REST_Request $request ) {
         'batt'       => $clean['batt'],
         'ais'        => isset( $data['ais'] ) ? wp_json_encode( $data['ais'] ) : null,
         'depth'      => $clean['depth'],
-        'src'        => isset( $data['src'] ) ? sanitize_text_field( (string) $data['src'] ) : null,
+        'water_temp' => $clean['water_temp'],
+        'estado'     => isset( $data['estado'] ) ? sanitize_text_field( (string) $data['estado'] ) : null,
+        'nome'       => isset( $data['nome'] ) ? sanitize_text_field( (string) $data['nome'] ) : null,
+        'tipo'       => $tipo,
+        'visivel'    => isset( $data['visivel'] ) && ! $data['visivel'] ? 0 : 1,
+        'src'        => isset( $data['src'] ) ? sanitize_text_field( (string) $data['src'] ) : 'desconhecido',
     );
-    $wpdb->insert( $table_name, $row );
+}
 
-    // A histerese da célula publicada é atualizada aqui, na escrita, e nunca
-    // nos endpoints públicos — leitor concorrente não pode alterar estado.
-    sal_core_atualiza_celula( $clean['lat'], $clean['lon'] );
+/**
+ * POST /sal/v1/sk — ingestão. Aceita um ponto ou um lote.
+ *
+ * Formatos aceitos (o primeiro é o legado, mantido para não quebrar nada):
+ *   {"lat":..,"lon":..}            → um ponto
+ *   [{...},{...}]                  → lote
+ *   {"pontos":[{...},{...}]}       → lote
+ *
+ * Reenviar um lote é seguro: a UNIQUE (ts, src) descarta o que já entrou. Isso
+ * importa porque o caminho normal de falha do barco é "gravou, mas a resposta
+ * se perdeu" — sem idempotência, cada timeout duplicaria a travessia inteira.
+ */
+function sal_core_handle_sk_data( WP_REST_Request $request ) {
+    $data = $request->get_json_params();
+    if ( empty( $data ) || ! is_array( $data ) ) {
+        return new WP_REST_Response( array( 'status' => 'error', 'message' => 'Payload vazio' ), 400 );
+    }
 
-    return array( 'ok' => true, 'id' => $wpdb->insert_id );
+    if ( isset( $data['pontos'] ) && is_array( $data['pontos'] ) ) {
+        $lote = $data['pontos'];
+    } elseif ( isset( $data[0] ) && is_array( $data[0] ) ) {
+        $lote = $data;
+    } else {
+        $lote = array( $data );
+    }
+
+    if ( count( $lote ) > SAL_CORE_LOTE_MAX ) {
+        return new WP_REST_Response(
+            array( 'status' => 'error', 'message' => 'Lote acima de ' . SAL_CORE_LOTE_MAX . ' pontos' ),
+            413
+        );
+    }
+
+    // Valida o lote inteiro ANTES de gravar qualquer coisa: meio lote gravado
+    // deixaria o cliente sem saber de onde recomeçar.
+    $linhas = array();
+    foreach ( $lote as $i => $ponto ) {
+        $linha = sal_core_valida_ponto( $ponto );
+        if ( is_string( $linha ) ) {
+            return new WP_REST_Response(
+                array( 'status' => 'error', 'message' => "ponto {$i}: {$linha}" ),
+                400
+            );
+        }
+        $linhas[] = $linha;
+    }
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'sal_track';
+
+    // $wpdb->insert lida corretamente com NULL, o que um INSERT IGNORE montado
+    // à mão não faz sem malabarismo. O custo é uma query por ponto; para um
+    // lote que chega uma vez por travessia, é troca barata por correção.
+    $suprimido = $wpdb->suppress_errors( true );
+    $gravados  = 0;
+    $ignorados = 0;
+    foreach ( $linhas as $linha ) {
+        if ( false !== $wpdb->insert( $table_name, $linha ) ) {
+            $gravados++;
+        } elseif ( false !== stripos( (string) $wpdb->last_error, 'duplicate' ) ) {
+            $ignorados++;
+        } else {
+            $wpdb->suppress_errors( $suprimido );
+            return new WP_REST_Response(
+                array( 'status' => 'error', 'message' => 'Falha ao gravar', 'gravados' => $gravados ),
+                500
+            );
+        }
+    }
+    $wpdb->suppress_errors( $suprimido );
+
+    // Recalcula a célula a partir da linha mais nova DA TABELA, não do lote:
+    // um lote pode chegar fora de ordem ou ser backfill de dado antigo.
+    $ultimo = sal_core_ultimo_ponto();
+    if ( $ultimo ) {
+        sal_core_atualiza_celula( $ultimo['lat'], $ultimo['lon'] );
+    }
+
+    return array( 'ok' => true, 'gravados' => $gravados, 'ignorados' => $ignorados );
 }
 
 /* =========================================================================
@@ -454,7 +570,13 @@ function sal_core_get_agora() {
     $silencio = ( time() - $visto_em ) > ( SAL_CORE_SILENCIO_HORAS * HOUR_IN_SECONDS );
 
     $vitais = array();
-    foreach ( array( 'depth' => 'profundidade_m', 'aws' => 'vento_no', 'batt' => 'bateria_v' ) as $col => $rotulo ) {
+    $mapa_vitais = array(
+        'depth'      => 'profundidade_m',
+        'aws'        => 'vento_no',
+        'batt'       => 'bateria_v',
+        'water_temp' => 'agua_c',
+    );
+    foreach ( $mapa_vitais as $col => $rotulo ) {
         if ( isset( $ultimo[ $col ] ) && $ultimo[ $col ] !== null ) {
             $vitais[ $rotulo ] = round( (float) $ultimo[ $col ], 1 );
         }
@@ -463,6 +585,9 @@ function sal_core_get_agora() {
     return array(
         'transmitindo'  => ! $silencio,
         'atualizado_em' => gmdate( 'Y-m-d\TH:00:00\Z', $visto_em ),
+        // "fundeado", "navegando"... não localiza e é o dado mais narrativo
+        // que temos. Sai inteiro; velocidade e rumo, não.
+        'estado'        => isset( $ultimo['estado'] ) ? $ultimo['estado'] : null,
         'area'          => array(
             'lat'     => round( $centro[0], 4 ),
             'lon'     => round( $centro[1], 4 ),
@@ -488,18 +613,22 @@ function sal_core_get_rota( WP_REST_Request $request ) {
     $limite = (int) $request->get_param( 'limite' );
     $limite = ( $limite > 0 && $limite <= 5000 ) ? $limite : 2000;
 
+    // visivel = 0 é o veto manual: serve para tirar do ar um ponto sem apagá-lo
+    // do banco. Nasceu para a revisão das estrelas importadas do Google Maps,
+    // onde entram lugares que não são do barco (casa de amigo, oficina...).
     $linhas = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT ts, lat, lon, sog, cog FROM {$t}
-             WHERE lat IS NOT NULL AND lon IS NOT NULL
+            "SELECT ts, lat, lon, sog, nome, tipo FROM {$t}
+             WHERE lat IS NOT NULL AND lon IS NOT NULL AND visivel = 1
              ORDER BY ts ASC, id ASC LIMIT %d",
             $limite
         ),
         ARRAY_A
     );
 
-    $celula = sal_core_celula_atual();
-    $pontos = array();
+    $celula  = sal_core_celula_atual();
+    $pontos  = array();
+    $lugares = array();
     $ocultos = 0;
 
     foreach ( $linhas as $linha ) {
@@ -510,6 +639,19 @@ function sal_core_get_rota( WP_REST_Request $request ) {
                 continue;
             }
         }
+
+        // Lugares são marcadores nomeados, não vértices de rota. Ligá-los numa
+        // linha desenharia uma derrota que nunca foi navegada — em vários
+        // trechos, por dentro da terra.
+        if ( 'lugar' === $linha['tipo'] ) {
+            $lugares[] = array(
+                'nome' => $linha['nome'],
+                'lat'  => round( (float) $linha['lat'], 5 ),
+                'lon'  => round( (float) $linha['lon'], 5 ),
+            );
+            continue;
+        }
+
         $pontos[] = array(
             'ts'  => gmdate( 'c', strtotime( $linha['ts'] . ' UTC' ) ),
             'lat' => round( (float) $linha['lat'], 5 ),
@@ -520,7 +662,7 @@ function sal_core_get_rota( WP_REST_Request $request ) {
 
     // "ocultos" é honestidade: diz ao leitor que o mapa está incompleto de
     // propósito, em vez de deixá-lo achar que a rota acabou ali.
-    return array( 'pontos' => $pontos, 'ocultos' => $ocultos );
+    return array( 'pontos' => $pontos, 'lugares' => $lugares, 'ocultos' => $ocultos );
 }
 
 /**
