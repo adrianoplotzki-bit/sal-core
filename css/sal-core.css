@@ -331,3 +331,10 @@
     width: 0.7rem;
     border-top: 1.4px dashed var(--sal-muted, #6b7280);
 }
+.sal-gr__virada-txt {
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 9.5px;
+    font-variant-numeric: tabular-nums;
+    fill: var(--sal-ink, #111827);
+    opacity: 0.75;
+}

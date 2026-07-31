@@ -372,12 +372,16 @@
         if (serie.marcas_tempo) {
             serie.marcas_tempo.forEach(function (mc) {
                 if (mc.ts < t0 || mc.ts > t1) { return; }
-                var x = px(mc.ts).toFixed(1);
+                var xn = px(mc.ts);
+                var x = xn.toFixed(1);
+                // O horário encosta na linha, do lado que tiver espaço: perto
+                // da borda direita o rótulo centralizado sairia do gráfico.
+                var perto = xn > (W - DIR) - 46;
                 dMarcas += '<line x1="' + x + '" y1="' + TOPO + '" x2="' + x + '" y2="' + (H - BASE) +
                     '" class="sal-gr__virada"/>' +
-                    '<text x="' + x + '" y="' + (TOPO - 3) +
-                    '" class="sal-gr__mare-txt" text-anchor="middle">' +
-                    (mc.tipo === 'alta' ? '▲' : '▼') + '</text>';
+                    '<text x="' + (perto ? xn - 4 : xn + 4).toFixed(1) + '" y="' + (TOPO + 5) +
+                    '" class="sal-gr__virada-txt" text-anchor="' + (perto ? 'end' : 'start') + '">' +
+                    (mc.tipo === 'alta' ? '▲' : '▼') + ' ' + partes(mc.ts).hora + '</text>';
             });
         }
 
