@@ -19,6 +19,7 @@
     var elEstado = document.getElementById('sal-balance-estado');
     var elCartoes = document.getElementById('sal-balance-cartoes');
     var elGraficos = document.getElementById('sal-balance-graficos');
+    var elMare = document.getElementById('sal-balance-mare');
     var elPeriodo = document.querySelector('.sal-balanco__periodo');
     if (!cfg || !elMapa || typeof L === 'undefined') { return; }
 
@@ -160,17 +161,57 @@
 
         elCartoes.innerHTML = html ||
             '<p class="sal-balanco__vazio">Sem leituras no momento.</p>';
+
+        desenharMare(agora && agora.mare);
+    }
+
+    function desenharMare(mare) {
+        if (!elMare) { return; }
+        if (!mare) { elMare.hidden = true; return; }
+
+        var p = partes(Math.floor(Date.parse(mare.proxima_em) / 1000));
+        var frases = ['Maré ' + mare.sentido + '.'];
+        frases.push((mare.proxima === 'alta' ? 'Preamar' : 'Baixamar') +
+            ' prevista para ' + p.hora + ', mais ' + mare.variacao_m + ' m.');
+
+        if (typeof mare.sob_quilha_m === 'number') {
+            var agoraQ = mare.sob_quilha_m;
+            var minQ = mare.sob_quilha_min_m;
+            frases.push('Sob a quilha: ' + agoraQ.toFixed(1) + ' m agora' +
+                (minQ < agoraQ ? ', ' + minQ.toFixed(1) + ' m na baixamar' : '') + '.');
+        }
+
+        // A ressalva não é rodapé decorativo. O modelo é oceânico e de grade
+        // grossa; comparado à estação de Maceió ele adiantou de 16 a 60 min
+        // (medido em 2026-07-31). Dentro de baía ou estuário essa diferença é
+        // a regra, não a exceção — e quem decide fundear com base nisso
+        // precisa saber.
+        elMare.innerHTML = '<span>' + frases.join(' ') + '</span>' +
+            '<em>Previsão de modelo oceânico global; em baías e estuários o ' +
+            'horário costuma atrasar em relação a ela.</em>';
+        elMare.hidden = false;
     }
 
     /* ------------------------------------------------------------ gráficos */
 
-    function formatarInstante(unix, span) {
-        var d = new Date(unix * 1000);
+    // Todos os horários do painel usam o fuso do SITE, não o do navegador. A
+    // maré acontece na hora do barco: quem abrir a página de outro fuso veria
+    // a preamar deslocada se o relógio fosse o dele.
+    var FUSO_S = (typeof cfg.fuso_horas === 'number' ? cfg.fuso_horas : 0) * 3600;
+
+    function partes(unix) {
+        var d = new Date((unix + FUSO_S) * 1000);
         function pad(n) { return (n < 10 ? '0' : '') + n; }
-        var dia = pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
-        var hora = pad(d.getHours()) + ':' + pad(d.getMinutes());
+        return {
+            dia: pad(d.getUTCDate()) + '/' + pad(d.getUTCMonth() + 1),
+            hora: pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes())
+        };
+    }
+
+    function formatarInstante(unix, span) {
+        var p = partes(unix);
         // Até dois dias o que importa é a hora; acima disso, a data.
-        return span <= 2 * 86400 ? hora : dia;
+        return span <= 2 * 86400 ? p.hora : p.dia;
     }
 
     function svgGrafico(chave, serie) {
@@ -278,21 +319,37 @@
               '" fill-opacity="0.16" stroke="none"/>'
             : '<path d="' + dArea.trim() + '" fill="url(#' + id + ')" stroke="none"/>';
 
-        // Inversões de maré: ponto pequeno na curva, seta de sentido e o valor.
-        // Discreto de propósito — é anotação sobre a série, não uma segunda
-        // série competindo com ela.
+        // Duas formas de marcar uma virada de maré, conforme o eixo Y.
         var dMarcas = '';
+
+        // Na própria curva de maré: ponto na altura prevista, com o valor.
         if (serie.marcas) {
             serie.marcas.forEach(function (mc) {
                 if (mc.ts < t0 || mc.ts > t1) { return; }
                 var x = px(mc.ts), y = py(mc.valor);
                 var alta = mc.tipo === 'alta';
-                var dy = alta ? -7 : 13;
                 dMarcas += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) +
                     '" r="2.6" class="sal-gr__mare"/>' +
-                    '<text x="' + x.toFixed(1) + '" y="' + (y + dy).toFixed(1) +
+                    '<text x="' + x.toFixed(1) + '" y="' + (y + (alta ? -7 : 13)).toFixed(1) +
                     '" class="sal-gr__mare-txt" text-anchor="middle">' +
                     (alta ? '▲' : '▼') + ' ' + mc.valor + '</text>';
+            });
+        }
+
+        // Em outro gráfico (profundidade): só o INSTANTE. A altura da maré
+        // está noutro eixo — desenhar 1,15 m num gráfico que vai de 5 a 7 m
+        // colocaria a marca fora da área. O risco vertical deixa comparar
+        // quando a maré DEVIA virar com quando a sondagem de fato virou, que
+        // é o atraso do estuário.
+        if (serie.marcas_tempo) {
+            serie.marcas_tempo.forEach(function (mc) {
+                if (mc.ts < t0 || mc.ts > t1) { return; }
+                var x = px(mc.ts).toFixed(1);
+                dMarcas += '<line x1="' + x + '" y1="' + TOPO + '" x2="' + x + '" y2="' + (H - BASE) +
+                    '" class="sal-gr__virada"/>' +
+                    '<text x="' + x + '" y="' + (TOPO - 3) +
+                    '" class="sal-gr__mare-txt" text-anchor="middle">' +
+                    (mc.tipo === 'alta' ? '▲' : '▼') + '</text>';
             });
         }
 

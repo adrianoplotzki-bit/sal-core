@@ -3,7 +3,7 @@
  * Plugin Name: SAL Core
  * Plugin URI:  https://hashtagsal.com.br
  * Description: Funcionalidades customizadas para o site #SAL: YouTube, Instagram, newsletter, integração com Apoia.se e telemetria do barco (SignalK).
- * Version:     0.11
+ * Version:     0.12
  * Author:      HashtagSal
  * License:     GPL2
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.11' );
+define( 'SAL_CORE_VERSION', '0.12' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -618,9 +618,16 @@ function sal_core_get_agora() {
         }
     }
 
+    // A sondagem só serve para a folga sob a quilha se for recente; com dado
+    // velho o número viraria uma garantia falsa sobre água que já mudou.
+    $prof = ( ! $silencio && isset( $ultimo['depth'] ) && $ultimo['depth'] !== null )
+        ? (float) $ultimo['depth'] : null;
+    $mare = sal_core_mare_agora( $ultimo['lat'], $ultimo['lon'], $prof );
+
     return array(
         'transmitindo'  => ! $silencio,
         'atualizado_em' => gmdate( 'Y-m-d\TH:00:00\Z', $visto_em ),
+        'mare'          => $mare,
         // "fundeado", "navegando"... não localiza e é o dado mais narrativo
         // que temos. Sai inteiro; velocidade e rumo, não.
         'estado'        => isset( $ultimo['estado'] ) ? $ultimo['estado'] : null,
@@ -713,7 +720,7 @@ function sal_core_metricas() {
     return array(
         'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false ),
         'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false,
-                                   'col_min' => 'depth_min', 'col_max' => 'depth_max', 'mare' => true ),
+                                   'col_min' => 'depth_min', 'col_max' => 'depth_max' ),
         // A faixa min..max transforma "12 nós" em "12 nós, variando de 8 a 19".
         // Num canal de vela a rajada é metade da história; média sozinha a
         // apaga, e é justamente o pico que decide se o dia foi duro.
@@ -725,155 +732,226 @@ function sal_core_metricas() {
 }
 
 /* -------------------------------------------------------------------------
- * Inversões de maré, deduzidas da própria sondagem
+ * MARÉ PREVISTA
  * -------------------------------------------------------------------------
- * Com o barco parado, a série de profundidade É a curva de maré: o fundo não
- * se move, o nível sim. Os extremos locais dessa curva são a preamar e a
- * baixamar.
+ * Fonte: Open-Meteo Marine (`sea_level_height_msl`). Grátis, sem chave,
+ * cobertura global — conferido em 2026-07-31 com amplitudes coerentes em
+ * Maceió (1,96 m), Canal da Mancha (3,39 m), Mediterrâneo (0,21 m) e
+ * Patagônia (8,41 m). Traz passado e futuro, o que permite sobrepor a
+ * previsão ao que o barco mediu.
  *
- * Por que não vem de uma API de maré: a conta do WorldTides está sem crédito
- * (confirmado em 2026-07-31, HTTP 400 "Not enough credits"), e qualquer fonte
- * de maré tem cobertura e datum que variam por região. Deduzir do próprio dado
- * funciona em qualquer lugar do mundo e não depende de chave nenhuma.
+ * POR QUE NÃO DEDUZIR DA PRÓPRIA SONDAGEM: foi a primeira tentativa e está
+ * errada. O barco gira na poita descrevendo um círculo de dezenas de metros,
+ * e o fundo dentro desse círculo varia sozinho. Pior: o giro é comandado por
+ * vento e pela CORRENTE DE MARÉ, que reverte no ritmo da própria maré — o
+ * erro fica correlacionado com o sinal e não há filtro que separe os dois.
  *
- * O que se perde: a altura sobre o datum da carta. O que sai aqui é a
- * profundidade sob o transdutor no instante da virada, não "1,8 m acima do
- * nível de redução". São coisas diferentes e o rótulo no site diz qual é.
+ * O datum é o nível médio do mar, não o da carta. Não importa para o que a
+ * página faz: tudo aqui é DIFERENÇA de altura ("ainda desce 0,6 m"), e
+ * diferença independe de onde está o zero.
  *
- * SÓ VALE COM O BARCO PARADO. Navegando, a profundidade muda porque o barco
- * anda sobre o fundo, não porque a maré virou — daí o filtro por velocidade.
+ * O modelo é oceânico e de grade grossa (~10 km). Dentro de estuário ele erra
+ * a fase — e é justamente essa discrepância que a página mostra, sobrepondo
+ * previsão e sondagem observada.
  */
 if ( ! defined( 'SAL_CORE_MARE_JANELA_S' ) ) {
     define( 'SAL_CORE_MARE_JANELA_S', 2 * HOUR_IN_SECONDS );
 }
-if ( ! defined( 'SAL_CORE_MARE_SEPARACAO_S' ) ) {
-    define( 'SAL_CORE_MARE_SEPARACAO_S', 3 * HOUR_IN_SECONDS );
-}
-// Amplitude mínima entre viradas consecutivas. Abaixo disso é marulho, não
-// maré, e marcar ruído como preamar é pior que não marcar nada.
 if ( ! defined( 'SAL_CORE_MARE_AMPLITUDE_M' ) ) {
-    define( 'SAL_CORE_MARE_AMPLITUDE_M', 0.15 );
-}
-// Acima disso o barco está navegando, e a sondagem deixa de medir maré.
-if ( ! defined( 'SAL_CORE_MARE_SOG_MAX' ) ) {
-    define( 'SAL_CORE_MARE_SOG_MAX', 1.0 );
+    define( 'SAL_CORE_MARE_AMPLITUDE_M', 0.05 );
 }
 
 /**
- * @param array $serie lista de array( ts_unix, profundidade|null, parado_bool )
- * @param int   $bloco tamanho do bloco em segundos
- * @return array lista de array( 'ts' => ..., 'valor' => ..., 'tipo' => 'alta'|'baixa' )
+ * Extremos locais de uma série. Genérico de propósito: recebe pares
+ * ( ts, valor ) e devolve as viradas, com refino parabólico.
+ *
+ * @param array $serie lista de array( ts_unix, valor|null )
+ * @param int   $passo espaçamento típico em segundos
  */
-function sal_core_inversoes_mare( array $serie, $bloco ) {
+function sal_core_extremos_serie( array $serie, $passo ) {
     $n = count( $serie );
-    $k = max( 2, (int) ceil( SAL_CORE_MARE_JANELA_S / max( 1, $bloco ) ) );
+    $k = max( 1, (int) round( SAL_CORE_MARE_JANELA_S / max( 1, $passo ) ) );
     if ( $n < 2 * $k + 1 ) {
         return array();
     }
 
-    // 1) Candidatos: extremo em relação a toda a vizinhança de ±2 h. A
-    //    meia-maré dura ~6 h, então uma janela de 2 h não funde duas viradas.
-    //
-    //    A JANELA PRECISA ESTAR COMPLETA DOS DOIS LADOS. Sem essa exigência,
-    //    o primeiro ponto da série é sempre o menor (ou maior) do que se vê
-    //    dele em diante, e vira uma virada fantasma no início da subida — o
-    //    erro chega a um quarto do período, ~3 h. Foi assim que este bug
-    //    apareceu no teste em 2026-07-31.
-    $cand = array();
+    $marcas = array();
+    // A janela precisa estar completa DOS DOIS LADOS. Sem isso, o primeiro
+    // ponto da série é sempre o menor do que se vê dele em diante e vira uma
+    // virada fantasma no início da subida — o erro chegava a um quarto do
+    // período, ~3 h. Bug pego por teste em 2026-07-31.
     for ( $i = $k; $i <= $n - 1 - $k; $i++ ) {
-        if ( $serie[ $i ][1] === null || ! $serie[ $i ][2] ) {
+        if ( $serie[ $i ][1] === null ) {
             continue;
         }
         $v = $serie[ $i ][1];
         $eh_max = true;
         $eh_min = true;
-        $antes = 0;
-        $depois = 0;
         $piso = $v;
         $teto = $v;
+        $vizinhos = 0;
 
         for ( $j = $i - $k; $j <= $i + $k; $j++ ) {
-            if ( $j === $i || $serie[ $j ][1] === null || ! $serie[ $j ][2] ) {
+            if ( $j === $i || $serie[ $j ][1] === null ) {
                 continue;
             }
-            if ( $j < $i ) { $antes++; } else { $depois++; }
+            $vizinhos++;
             $u = $serie[ $j ][1];
             if ( $u > $v ) { $eh_max = false; }
             if ( $u < $v ) { $eh_min = false; }
             if ( $u < $piso ) { $piso = $u; }
             if ( $u > $teto ) { $teto = $u; }
         }
-
-        // Buraco de transmissão ou trecho navegando de um dos lados: não dá
-        // para afirmar que ali houve um extremo.
-        if ( $antes < $k / 2 || $depois < $k / 2 ) {
+        if ( $vizinhos < $k ) {
             continue;
         }
-
-        // Proeminência local. Um marulho de 5 cm tem extremos legítimos a
-        // cada poucos minutos; chamá-los de preamar seria pior que não marcar
-        // nada. A maré move a janela inteira, o marulho não.
         if ( ( $teto - $piso ) < SAL_CORE_MARE_AMPLITUDE_M ) {
+            continue; // variação pequena demais para ser virada
+        }
+        if ( ! ( $eh_max xor $eh_min ) ) {
             continue;
         }
 
-        if ( $eh_max && ! $eh_min ) {
-            $cand[] = array( $serie[ $i ][0], $v, 'alta' );
-        } elseif ( $eh_min && ! $eh_max ) {
-            $cand[] = array( $serie[ $i ][0], $v, 'baixa' );
-        }
-    }
-    if ( ! $cand ) {
-        return array();
-    }
+        $ts  = $serie[ $i ][0];
+        $val = $v;
 
-    // 2) Um platô gera vários candidatos seguidos; fica o mais extremo de cada
-    //    aglomerado do mesmo tipo dentro da janela de separação.
-    $agrupado = array();
-    foreach ( $cand as $c ) {
-        $ult = end( $agrupado );
-        if ( $ult && $ult[2] === $c[2] && ( $c[0] - $ult[0] ) < SAL_CORE_MARE_SEPARACAO_S ) {
-            $melhor = ( 'alta' === $c[2] ) ? ( $c[1] > $ult[1] ) : ( $c[1] < $ult[1] );
-            if ( $melhor ) {
-                $agrupado[ count( $agrupado ) - 1 ] = $c;
+        // Refino parabólico. A previsão vem de hora em hora; sem isto a
+        // preamar sairia sempre "em ponto", com até 30 min de erro.
+        $a = $serie[ $i - 1 ][1];
+        $c = $serie[ $i + 1 ][1];
+        if ( $a !== null && $c !== null ) {
+            $den = $a - 2 * $v + $c;
+            if ( abs( $den ) > 1e-9 ) {
+                $desloc = 0.5 * ( $a - $c ) / $den;
+                if ( abs( $desloc ) <= 1 ) {
+                    $ts  = (int) round( $ts + $desloc * $passo );
+                    $val = $v - 0.25 * ( $a - $c ) * $desloc;
+                }
             }
-            continue;
         }
-        $agrupado[] = $c;
-    }
 
-    // 3) Preamar e baixamar se alternam. Duas do mesmo tipo em sequência
-    //    significa que a do meio se perdeu — fica a mais extrema. E a
-    //    diferença entre viradas vizinhas precisa passar da amplitude mínima.
-    $saida = array();
-    foreach ( $agrupado as $c ) {
-        $ult = end( $saida );
-        if ( ! $ult ) {
-            $saida[] = $c;
-            continue;
-        }
-        if ( $ult[2] === $c[2] ) {
-            $melhor = ( 'alta' === $c[2] ) ? ( $c[1] > $ult[1] ) : ( $c[1] < $ult[1] );
-            if ( $melhor ) {
-                $saida[ count( $saida ) - 1 ] = $c;
-            }
-            continue;
-        }
-        if ( abs( $c[1] - $ult[1] ) < SAL_CORE_MARE_AMPLITUDE_M ) {
-            continue;
-        }
-        $saida[] = $c;
-    }
-
-    $marcas = array();
-    foreach ( $saida as $c ) {
         $marcas[] = array(
-            'ts'    => $c[0],
-            'valor' => round( $c[1], 2 ),
-            'tipo'  => $c[2],
+            'ts'    => $ts,
+            'valor' => round( $val, 2 ),
+            'tipo'  => $eh_max ? 'alta' : 'baixa',
         );
     }
     return $marcas;
+}
+
+/**
+ * Série de maré prevista para a posição, de -7 a +3 dias, de hora em hora.
+ *
+ * A posição é arredondada para 0,1° antes de sair daqui. Isso não custa
+ * precisão — a grade do modelo é mais grossa que isso — e evita entregar a
+ * coordenada exata do barco a um terceiro só para saber a maré.
+ *
+ * @return array|null lista de array( ts_unix, altura_m )
+ */
+function sal_core_mare_prevista( $lat, $lon ) {
+    $lat = round( (float) $lat, 1 );
+    $lon = round( (float) $lon, 1 );
+
+    $chave = 'sal_mare_' . str_replace( array( '.', '-' ), array( '_', 'm' ), $lat . '_' . $lon );
+    $cache = get_transient( $chave );
+    if ( false !== $cache ) {
+        return '-' === $cache ? null : $cache;
+    }
+
+    $resp = wp_remote_get(
+        add_query_arg(
+            array(
+                'latitude'      => $lat,
+                'longitude'     => $lon,
+                'hourly'        => 'sea_level_height_msl',
+                'past_days'     => 7,
+                'forecast_days' => 3,
+                'timeformat'    => 'unixtime',
+            ),
+            'https://marine-api.open-meteo.com/v1/marine'
+        ),
+        array( 'timeout' => 12, 'user-agent' => 'HashtagSal/1.0 (+https://hashtagsal.com.br)' )
+    );
+
+    $serie = null;
+    if ( ! is_wp_error( $resp ) && 200 === wp_remote_retrieve_response_code( $resp ) ) {
+        $dados = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( isset( $dados['hourly']['time'], $dados['hourly']['sea_level_height_msl'] ) ) {
+            $t = $dados['hourly']['time'];
+            $h = $dados['hourly']['sea_level_height_msl'];
+            $serie = array();
+            foreach ( $t as $i => $ts ) {
+                $v = isset( $h[ $i ] ) ? $h[ $i ] : null;
+                $serie[] = array( (int) $ts, $v === null ? null : (float) $v );
+            }
+            // Fiorde estreito ou lago cai fora da grade oceânica e volta tudo
+            // nulo. Melhor não ter maré do que ter uma linha reta fingindo.
+            $validos = 0;
+            foreach ( $serie as $x ) {
+                if ( $x[1] !== null ) { $validos++; }
+            }
+            if ( $validos < 24 ) {
+                $serie = null;
+            }
+        }
+    }
+
+    set_transient( $chave, $serie === null ? '-' : $serie, HOUR_IN_SECONDS );
+    return $serie;
+}
+
+/**
+ * O que o navegante precisa saber agora: quando vira, quanto ainda desce e
+ * quanta água sobra sob a quilha na baixamar.
+ */
+function sal_core_mare_agora( $lat, $lon, $profundidade ) {
+    $serie = sal_core_mare_prevista( $lat, $lon );
+    if ( ! $serie ) {
+        return null;
+    }
+
+    $agora = time();
+    $extremos = sal_core_extremos_serie( $serie, HOUR_IN_SECONDS );
+
+    $proximo = null;
+    foreach ( $extremos as $e ) {
+        if ( $e['ts'] > $agora ) { $proximo = $e; break; }
+    }
+    if ( ! $proximo ) {
+        return null;
+    }
+
+    // Altura prevista agora, interpolada entre as duas horas vizinhas.
+    $altura_agora = null;
+    for ( $i = 0; $i < count( $serie ) - 1; $i++ ) {
+        if ( $serie[ $i ][0] <= $agora && $serie[ $i + 1 ][0] > $agora
+             && $serie[ $i ][1] !== null && $serie[ $i + 1 ][1] !== null ) {
+            $f = ( $agora - $serie[ $i ][0] ) / ( $serie[ $i + 1 ][0] - $serie[ $i ][0] );
+            $altura_agora = $serie[ $i ][1] + $f * ( $serie[ $i + 1 ][1] - $serie[ $i ][1] );
+            break;
+        }
+    }
+    if ( $altura_agora === null ) {
+        return null;
+    }
+
+    $delta = $proximo['valor'] - $altura_agora;
+
+    $saida = array(
+        'sentido'     => $delta < 0 ? 'baixando' : 'subindo',
+        'proxima'     => $proximo['tipo'],
+        'proxima_em'  => gmdate( 'c', $proximo['ts'] ),
+        'variacao_m'  => round( abs( $delta ), 2 ),
+    );
+
+    // Sob a quilha: o que o ecobatímetro lê menos o calado. Só faz sentido
+    // com sondagem fresca — por isso quem chama passa a profundidade ou null.
+    $calado = (float) get_option( 'sal_core_calado_m', 0 );
+    if ( $profundidade !== null && $calado > 0 ) {
+        $saida['sob_quilha_m']    = round( $profundidade - $calado, 2 );
+        $saida['sob_quilha_min_m'] = round( $profundidade - $calado + min( 0, $delta ), 2 );
+    }
+    return $saida;
 }
 
 /**
@@ -1032,24 +1110,52 @@ function sal_core_get_series( WP_REST_Request $request ) {
             $serie['faixa'] = $faixa;
         }
 
-        if ( ! empty( $m['mare'] ) ) {
-            $bruta = array();
-            foreach ( $linhas as $linha ) {
-                $parado = ( $linha['__sog_max'] === null )
-                    || ( (float) $linha['__sog_max'] < SAL_CORE_MARE_SOG_MAX );
-                $bruta[] = array(
-                    (int) $linha['bloco'],
-                    $linha[ $chave ] === null ? null : (float) $linha[ $chave ],
-                    $parado,
-                );
+        $series[ $chave ] = $serie;
+    }
+
+    // Maré prevista, sobreposta ao período pedido. Vem de fora (Open-Meteo),
+    // não do banco, então só existe onde a previsão alcança: -7 a +3 dias.
+    $ultimo_ponto = sal_core_ultimo_ponto();
+    if ( $ultimo_ponto ) {
+        $prev = sal_core_mare_prevista( $ultimo_ponto['lat'], $ultimo_ponto['lon'] );
+        if ( $prev ) {
+            $de_unix  = strtotime( $extremos['de'] . ' UTC' );
+            $ate_unix = strtotime( $extremos['ate'] . ' UTC' ) + 6 * HOUR_IN_SECONDS;
+            $pontos_mare = array();
+            foreach ( $prev as $x ) {
+                if ( $x[0] >= $de_unix && $x[0] <= $ate_unix ) {
+                    $pontos_mare[] = array( $x[0], $x[1] === null ? null : round( $x[1], 2 ) );
+                }
             }
-            $marcas = sal_core_inversoes_mare( $bruta, $bloco );
-            if ( $marcas ) {
-                $serie['marcas'] = $marcas;
+            if ( count( $pontos_mare ) >= 6 ) {
+                $marcas_mare = array();
+                foreach ( sal_core_extremos_serie( $prev, HOUR_IN_SECONDS ) as $mk ) {
+                    if ( $mk['ts'] >= $de_unix && $mk['ts'] <= $ate_unix ) {
+                        $marcas_mare[] = $mk;
+                    }
+                }
+                $series['mare_m'] = array(
+                    'rotulo'   => 'Maré prevista',
+                    'unidade'  => 'm',
+                    'cor'      => '#0d9488',
+                    'pontos'   => $pontos_mare,
+                    'marcas'   => $marcas_mare,
+                    'previsao' => true,
+                );
+                // As mesmas viradas vão para o gráfico de profundidade: é
+                // sobrepondo previsão e sondagem que se enxerga o atraso do
+                // estuário, que é o motivo de existir esta função.
+                // Chave diferente de propósito: no gráfico de maré a marca
+                // tem altura própria e vira ponto na curva; no de
+                // profundidade, o eixo Y é outro (metros de fundo, não de
+                // maré), então só o INSTANTE faz sentido — vira risco
+                // vertical. Usar a mesma chave desenharia a preamar em 1,15 m
+                // num eixo que vai de 5 a 7 m, ou seja, fora do gráfico.
+                if ( isset( $series['profundidade_m'] ) && $marcas_mare ) {
+                    $series['profundidade_m']['marcas_tempo'] = $marcas_mare;
+                }
             }
         }
-
-        $series[ $chave ] = $serie;
     }
 
     return array(
@@ -1252,10 +1358,14 @@ function sal_core_balance_shortcode( $atts ) {
     wp_enqueue_style( 'sal-core-leaflet' );
     wp_enqueue_script( 'sal-core-leaflet' );
     wp_enqueue_script( 'sal-core-balance' );
+    // Fuso do SITE, não do navegador de quem lê. A maré acontece na hora do
+    // barco; alguém abrindo a página de Lisboa veria a preamar quatro horas
+    // deslocada se o horário viesse do relógio dele.
     wp_localize_script( 'sal-core-balance', 'salBalanco', array(
-        'agora'  => esc_url_raw( rest_url( 'sal/v1/agora' ) ),
-        'rota'   => esc_url_raw( rest_url( 'sal/v1/rota' ) ),
-        'series' => esc_url_raw( rest_url( 'sal/v1/series' ) ),
+        'agora'      => esc_url_raw( rest_url( 'sal/v1/agora' ) ),
+        'rota'       => esc_url_raw( rest_url( 'sal/v1/rota' ) ),
+        'series'     => esc_url_raw( rest_url( 'sal/v1/series' ) ),
+        'fuso_horas' => (float) get_option( 'gmt_offset', 0 ),
     ) );
 
     $janelas = array( '24h' => '24 h', '7d' => '7 dias', '30d' => '30 dias', 'tudo' => 'Tudo' );
@@ -1269,6 +1379,7 @@ function sal_core_balance_shortcode( $atts ) {
         <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
 
         <div class="sal-balanco__leituras" id="sal-balance-cartoes"></div>
+        <p class="sal-balanco__mare" id="sal-balance-mare" hidden></p>
 
         <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
             <?php foreach ( $janelas as $chave => $rotulo ) : ?>
