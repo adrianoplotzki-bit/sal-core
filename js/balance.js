@@ -64,13 +64,12 @@
 
     /* ---------------------------------------------------------------- mapa */
 
+    // Só a ressalva de precisão. A situação e o lugar saíram daqui porque já
+    // estavam no cartão e no próprio mapa, e o "agora" vive no ponto verde do
+    // cartão de situação — um lugar só a dizer se a leitura é do momento.
     function texto(agora) {
         if (!agora || !agora.area) { return 'Sem transmissão do Balanço no momento.'; }
-        var onde = agora.area.nome ? ('perto de ' + agora.area.nome) : 'em algum ponto desta área';
-        var estado = ESTADOS[agora.estado];
-        return (agora.transmitindo ? 'Agora: ' : 'Última posição conhecida: ') +
-            (estado ? estado + ', ' : '') + onde +
-            ' — posição aproximada, num raio de ' + agora.area.raio_km + ' km.';
+        return 'Posição aproximada, num raio de ' + agora.area.raio_km + ' km.';
     }
 
     function desenharMapa(agora, rota) {
