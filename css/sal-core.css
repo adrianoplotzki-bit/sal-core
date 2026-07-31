@@ -64,125 +64,228 @@
     padding: 6px;
 }
 
-/* Painel do Balanço (shortcode [sal_balance]) */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Painel do Balanço — instrumento náutico
+   ---------------------------------------------------------------------------
+   Fundo azul-marinho profundo, leituras em Bebas Neue (a display do #SAL) e
+   rótulos em caixa alta espaçada: a gramática de um instrumento de bordo.
+   O contraste com o corpo claro da página é proposital — o painel tem que
+   ler como aparelho, não como mais um bloco de texto.
+
+   As variáveis caem para valores literais quando o tema não está ativo, para
+   o shortcode não quebrar fora do sal-theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
 .sal-balanco {
-    margin: 1rem 0 1.5rem;
+    --sal-inst-fundo:  #0a1f33;
+    --sal-inst-topo:   #103049;
+    --sal-inst-linha:  rgba(255, 255, 255, 0.10);
+    --sal-inst-tinta:  #f1f5f9;
+    --sal-inst-fraco:  rgba(241, 245, 249, 0.55);
+    --sal-inst-vivo:   #34d399;
+
+    margin: 1.25rem 0 1.75rem;
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+}
+
+/* ─── Mapa ─────────────────────────────────────────────────────────────── */
+.sal-balanco__mapa-caixa {
+    border-radius: var(--sal-radius-lg, 12px);
+    overflow: hidden;
+    border: 1px solid var(--sal-border, #e5e7eb);
+    box-shadow: var(--sal-shadow, 0 1px 3px rgba(0, 0, 0, 0.08));
 }
 .sal-balanco__mapa {
     height: 380px;
-    border-radius: 12px;
-    overflow: hidden;
 }
 .sal-balanco__estado {
-    margin: 10px 0 0;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    opacity: 0.85;
+    margin: 0.65rem 0 0;
+    font-size: var(--sal-fs-sm, 0.875rem);
+    line-height: 1.55;
+    color: var(--sal-muted, #6b7280);
 }
 
-/* Sinais vitais ao vivo */
-.sal-balanco__cartoes {
+/* ─── O painel ─────────────────────────────────────────────────────────── */
+.sal-painel {
+    margin-top: 1.25rem;
+    padding: 1.15rem 1.25rem 1.25rem;
+    border-radius: var(--sal-radius-lg, 12px);
+    background:
+        radial-gradient(120% 80% at 12% 0%, var(--sal-inst-topo) 0%, transparent 62%),
+        var(--sal-inst-fundo);
+    color: var(--sal-inst-tinta);
+}
+
+.sal-painel__topo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--sal-inst-linha);
+}
+.sal-painel__marca {
+    font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
+    font-size: 1.35rem;
+    letter-spacing: 0.09em;
+    line-height: 1;
+}
+.sal-painel__situacao {
+    margin-left: auto;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--sal-inst-fraco);
+}
+/* Ponto que só acende quando o barco está mesmo transmitindo. */
+.sal-painel__situacao.is-vivo::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 0.45rem;
+    border-radius: 50%;
+    background: var(--sal-inst-vivo);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+    vertical-align: middle;
+}
+
+/* ─── Leituras ─────────────────────────────────────────────────────────── */
+.sal-painel__leituras {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 10px;
-    margin-top: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 }
 .sal-vital {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 12px 14px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.02);
+    padding: 1rem 0.9rem;
+    border-right: 1px solid var(--sal-inst-linha);
+}
+.sal-vital:last-child {
+    border-right: 0;
 }
 .sal-vital__valor {
-    font-size: 1.5rem;
-    font-weight: 600;
-    line-height: 1.15;
+    display: block;
+    font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
+    font-size: 2.4rem;
+    line-height: 0.95;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
 }
 .sal-vital__valor small {
-    font-size: 0.8rem;
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 0.72rem;
     font-weight: 400;
-    margin-left: 3px;
-    opacity: 0.65;
-}
-.sal-vital--estado .sal-vital__valor {
-    font-size: 1.05rem;
-    padding-top: 6px;
+    letter-spacing: 0;
+    margin-left: 0.2rem;
+    color: var(--sal-inst-fraco);
 }
 .sal-vital__rotulo {
-    font-size: 0.75rem;
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.63rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    opacity: 0.6;
+    letter-spacing: 0.14em;
+    color: var(--sal-inst-fraco);
 }
 
-/* Seletor de período */
-.sal-balanco__periodo {
+/* ─── Seletor de período ───────────────────────────────────────────────── */
+.sal-painel__periodo {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin: 20px 0 10px;
+    gap: 0.35rem;
+    padding-top: 1rem;
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--sal-inst-linha);
 }
-.sal-balanco__periodo button {
-    padding: 6px 14px;
-    font: inherit;
-    font-size: 0.85rem;
+.sal-painel__periodo button {
+    padding: 0.4rem 0.85rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
     cursor: pointer;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 999px;
+    color: var(--sal-inst-fraco);
     background: transparent;
-    color: inherit;
+    border: 1px solid var(--sal-inst-linha);
+    border-radius: 999px;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
-.sal-balanco__periodo button:hover {
-    border-color: rgba(0, 0, 0, 0.35);
+.sal-painel__periodo button:hover {
+    color: var(--sal-inst-tinta);
+    border-color: rgba(255, 255, 255, 0.3);
 }
-.sal-balanco__periodo button.is-ativo {
-    background: #111;
-    border-color: #111;
+.sal-painel__periodo button.is-ativo {
     color: #fff;
+    background: var(--sal-red, #dc2626);
+    border-color: var(--sal-red, #dc2626);
 }
 
-/* Gráficos */
+/* ─── Gráficos ─────────────────────────────────────────────────────────── */
+.sal-painel__graficos {
+    margin-top: 1.1rem;
+}
 .sal-gr {
-    margin: 0 0 18px;
+    margin: 0 0 1.1rem;
+}
+.sal-gr:last-child {
+    margin-bottom: 0;
 }
 .sal-gr__titulo {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 10px;
-    font-size: 0.8rem;
+    gap: 0.6rem;
+    margin-bottom: 0.15rem;
+    font-size: 0.63rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    opacity: 0.6;
-    margin-bottom: 2px;
+    letter-spacing: 0.14em;
+    color: var(--sal-inst-fraco);
 }
 .sal-gr__agora {
-    font-size: 0.95rem;
+    font-family: var(--sal-font-display, "Bebas Neue", Impact, sans-serif);
+    font-size: 1.25rem;
+    letter-spacing: 0.03em;
+    color: var(--sal-inst-tinta);
     text-transform: none;
-    letter-spacing: 0;
-    font-weight: 600;
-    opacity: 1;
+    font-variant-numeric: tabular-nums;
 }
+.sal-gr__agora small {
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 0.66rem;
+    letter-spacing: 0;
+    margin-left: 0.18rem;
+    color: var(--sal-inst-fraco);
+}
+/* preserveAspectRatio="none" no SVG faria o traço engordar ao esticar; o
+   vector-effect no <path> mantém a espessura constante. */
 .sal-gr svg {
-    width: 100%;
-    height: auto;
     display: block;
+    width: 100%;
+    height: 92px;
     overflow: visible;
 }
 .sal-gr__grade {
-    stroke: currentColor;
+    stroke: #fff;
     stroke-width: 1;
-    opacity: 0.12;
+    opacity: 0.09;
+    vector-effect: non-scaling-stroke;
 }
 .sal-gr__eixo {
-    font-size: 10px;
-    fill: currentColor;
-    opacity: 0.5;
+    font-family: var(--sal-font-sans, "Inter", system-ui, sans-serif);
+    font-size: 9px;
+    fill: #fff;
+    opacity: 0.42;
 }
-.sal-balanco__vazio {
-    font-size: 0.9rem;
-    opacity: 0.6;
+.sal-painel__vazio {
+    margin: 0;
+    padding: 1rem 0;
+    font-size: var(--sal-fs-sm, 0.875rem);
+    color: var(--sal-inst-fraco);
+}
+
+@media (max-width: 560px) {
+    .sal-vital {
+        border-right: 0;
+        border-bottom: 1px solid var(--sal-inst-linha);
+    }
+    .sal-vital__valor {
+        font-size: 2rem;
+    }
 }

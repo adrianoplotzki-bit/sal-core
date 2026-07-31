@@ -19,7 +19,8 @@
     var elEstado = document.getElementById('sal-balance-estado');
     var elCartoes = document.getElementById('sal-balance-cartoes');
     var elGraficos = document.getElementById('sal-balance-graficos');
-    var elPeriodo = document.querySelector('.sal-balanco__periodo');
+    var elSituacao = document.getElementById('sal-balance-situacao');
+    var elPeriodo = document.querySelector('.sal-painel__periodo');
     if (!cfg || !elMapa || typeof L === 'undefined') { return; }
 
     var INTERVALO = 5 * 60 * 1000;
@@ -124,15 +125,16 @@
     /* ------------------------------------------------------------ cartões */
 
     function desenharCartoes(agora) {
+        if (elSituacao) {
+            var sit = agora && ESTADOS[agora.estado];
+            elSituacao.textContent = sit || '';
+            elSituacao.className = 'sal-painel__situacao' +
+                (agora && agora.transmitindo ? ' is-vivo' : '');
+        }
+
         if (!elCartoes) { return; }
         var v = (agora && agora.vitais) || {};
         var html = '';
-
-        var estado = agora && ESTADOS[agora.estado];
-        if (estado) {
-            html += '<div class="sal-vital sal-vital--estado"><span class="sal-vital__valor">' +
-                escapar(estado) + '</span><span class="sal-vital__rotulo">Situação</span></div>';
-        }
 
         VITAIS.forEach(function (d) {
             if (typeof v[d.chave] !== 'number') { return; }
@@ -141,7 +143,8 @@
                 '<span class="sal-vital__rotulo">' + d.rotulo + '</span></div>';
         });
 
-        elCartoes.innerHTML = html;
+        elCartoes.innerHTML = html ||
+            '<p class="sal-painel__vazio">Sem leituras no momento.</p>';
     }
 
     /* ------------------------------------------------------------ gráficos */
@@ -155,15 +158,29 @@
         return span <= 2 * 86400 ? hora : dia;
     }
 
-    function svgGrafico(serie) {
+    function svgGrafico(chave, serie) {
         var P = serie.pontos;
-        var W = 640, H = 150, ESQ = 46, DIR = 10, TOPO = 12, BASE = 24;
-        var validos = [];
-        var i;
+        var W = 640, H = 150, ESQ = 44, DIR = 8, TOPO = 14, BASE = 24;
+
+        // Quebra a série em trechos contíguos. Buraco vira interrupção na
+        // linha, não um segmento reto atravessando o gráfico: o barco esteve
+        // sem transmitir, e a reta afirmaria um dado que não existe.
+        var trechos = [], atual = [], validos = [], i;
         for (i = 0; i < P.length; i++) {
-            if (P[i][1] !== null && P[i][1] !== undefined) { validos.push(P[i][1]); }
+            var v = P[i][1];
+            if (v === null || v === undefined) {
+                if (atual.length) { trechos.push(atual); atual = []; }
+                continue;
+            }
+            atual.push(P[i]);
+            validos.push(v);
         }
-        if (!validos.length) { return ''; }
+        if (atual.length) { trechos.push(atual); }
+
+        // Um ponto só não é uma série temporal: os três rótulos do eixo X
+        // sairiam com a mesma hora e a linha não existiria. Melhor dizer que
+        // ainda não há histórico do que desenhar uma grade vazia.
+        if (validos.length < 2) { return ''; }
 
         var min = Math.min.apply(null, validos);
         var max = Math.max.apply(null, validos);
@@ -178,23 +195,24 @@
         function px(t) { return ESQ + (t - t0) / span * (W - ESQ - DIR); }
         function py(v) { return TOPO + (1 - (v - min) / (max - min)) * (H - TOPO - BASE); }
 
-        // Buracos na série viram interrupção na linha, não um segmento reto
-        // atravessando o gráfico: o barco esteve sem transmitir, e inventar
-        // uma reta ali seria afirmar um dado que não existe.
-        var d = '', desenhando = false;
-        for (i = 0; i < P.length; i++) {
-            var v = P[i][1];
-            if (v === null || v === undefined) { desenhando = false; continue; }
-            d += (desenhando ? 'L' : 'M') + px(P[i][0]).toFixed(1) + ' ' + py(v).toFixed(1) + ' ';
-            desenhando = true;
-        }
+        var chao = (H - BASE).toFixed(1);
+        var dLinha = '', dArea = '';
+        trechos.forEach(function (trecho) {
+            var pedaco = trecho.map(function (p) {
+                return px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1);
+            });
+            dLinha += 'M' + pedaco.join(' L') + ' ';
+            dArea += 'M' + px(trecho[0][0]).toFixed(1) + ' ' + chao +
+                ' L' + pedaco.join(' L') +
+                ' L' + px(trecho[trecho.length - 1][0]).toFixed(1) + ' ' + chao + ' Z ';
+        });
 
-        var linhas = '';
+        var grade = '';
         [max, (max + min) / 2, min].forEach(function (nivel) {
             var y = py(nivel).toFixed(1);
-            linhas += '<line x1="' + ESQ + '" y1="' + y + '" x2="' + (W - DIR) + '" y2="' + y +
+            grade += '<line x1="' + ESQ + '" y1="' + y + '" x2="' + (W - DIR) + '" y2="' + y +
                 '" class="sal-gr__grade"/>' +
-                '<text x="' + (ESQ - 6) + '" y="' + (parseFloat(y) + 4) +
+                '<text x="' + (ESQ - 6) + '" y="' + (parseFloat(y) + 3.5) +
                 '" class="sal-gr__eixo" text-anchor="end">' + nivel.toFixed(1) + '</text>';
         });
 
@@ -207,29 +225,36 @@
                 formatarInstante(t, span) + '</text>';
         });
 
+        var id = 'salgr-' + chave;
         var ultimo = validos[validos.length - 1];
         return '<figure class="sal-gr">' +
-            '<figcaption class="sal-gr__titulo">' + escapar(serie.rotulo) +
-            ' <span class="sal-gr__agora">' + ultimo + ' ' + escapar(serie.unidade) + '</span></figcaption>' +
-            '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' +
+            '<figcaption class="sal-gr__titulo"><span>' + escapar(serie.rotulo) + '</span>' +
+            '<span class="sal-gr__agora">' + ultimo +
+            '<small>' + escapar(serie.unidade) + '</small></span></figcaption>' +
+            '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' +
             escapar(serie.rotulo + ' em ' + serie.unidade) + '">' +
-            linhas + marcas +
-            '<path d="' + d.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
-            '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+            '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0.35"/>' +
+            '<stop offset="100%" stop-color="' + escapar(serie.cor) + '" stop-opacity="0"/>' +
+            '</linearGradient></defs>' +
+            grade + marcas +
+            '<path d="' + dArea.trim() + '" fill="url(#' + id + ')" stroke="none"/>' +
+            '<path d="' + dLinha.trim() + '" fill="none" stroke="' + escapar(serie.cor) +
+            '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
             '</svg></figure>';
     }
 
     function desenharGraficos(dados) {
         if (!elGraficos) { return; }
-        if (!dados || !dados.series || !Object.keys(dados.series).length) {
-            elGraficos.innerHTML = '<p class="sal-balanco__vazio">Sem histórico neste período.</p>';
-            return;
-        }
         var html = '';
-        Object.keys(dados.series).forEach(function (chave) {
-            html += svgGrafico(dados.series[chave]);
-        });
-        elGraficos.innerHTML = html;
+        if (dados && dados.series) {
+            Object.keys(dados.series).forEach(function (chave) {
+                html += svgGrafico(chave, dados.series[chave]);
+            });
+        }
+        elGraficos.innerHTML = html ||
+            '<p class="sal-painel__vazio">Ainda não há histórico suficiente para traçar. ' +
+            'Os gráficos aparecem quando o Balanço começar a transmitir.</p>';
     }
 
     function carregarSeries() {

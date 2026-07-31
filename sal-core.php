@@ -1035,21 +1035,30 @@ function sal_core_balance_shortcode( $atts ) {
     ob_start();
     ?>
     <div class="sal-balanco">
-        <div id="sal-balance-map" class="sal-balanco__mapa"></div>
+        <div class="sal-balanco__mapa-caixa">
+            <div id="sal-balance-map" class="sal-balanco__mapa"></div>
+        </div>
         <p class="sal-balanco__estado" id="sal-balance-estado">Carregando a posição do Balanço…</p>
 
-        <div class="sal-balanco__cartoes" id="sal-balance-cartoes"></div>
+        <div class="sal-painel">
+            <div class="sal-painel__topo">
+                <span class="sal-painel__marca">Balanço</span>
+                <span class="sal-painel__situacao" id="sal-balance-situacao"></span>
+            </div>
 
-        <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
-            <?php foreach ( $janelas as $chave => $rotulo ) : ?>
-                <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
-                    <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
-                    <?php echo esc_html( $rotulo ); ?>
-                </button>
-            <?php endforeach; ?>
+            <div class="sal-painel__leituras" id="sal-balance-cartoes"></div>
+
+            <div class="sal-painel__periodo" role="group" aria-label="Período do histórico">
+                <?php foreach ( $janelas as $chave => $rotulo ) : ?>
+                    <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
+                        <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
+                        <?php echo esc_html( $rotulo ); ?>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="sal-painel__graficos" id="sal-balance-graficos"></div>
         </div>
-
-        <div class="sal-balanco__graficos" id="sal-balance-graficos"></div>
     </div>
     <?php
     return ob_get_clean();
