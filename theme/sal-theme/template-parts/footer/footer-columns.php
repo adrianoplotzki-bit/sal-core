@@ -38,7 +38,7 @@
 			<li><a href="<?php echo esc_url( home_url( '/' ) ); ?>"><?php esc_html_e( 'Home', 'sal-theme' ); ?></a></li>
 			<li><a href="<?php echo esc_url( home_url( '/quem-somos' ) ); ?>"><?php esc_html_e( 'O que é o #SAL', 'sal-theme' ); ?></a></li>
 			<li><a href="<?php echo esc_url( home_url( '/balanco' ) ); ?>"><?php esc_html_e( 'Acompanhe o Balanço', 'sal-theme' ); ?></a></li>
-			<li><a href="<?php echo esc_url( home_url( '/clube-sal' ) ); ?>"><?php esc_html_e( 'Clube de Vantagens', 'sal-theme' ); ?></a></li>
+			<li><a href="<?php echo esc_url( home_url( '/clube-sal' ) ); ?>"><?php esc_html_e( 'Clube do #SAL', 'sal-theme' ); ?></a></li>
 		</ul>
 	</div>
 

@@ -18,7 +18,7 @@ if ( ! function_exists( 'sal_theme_fallback_nav' ) ) :
 		$items = [
 			__( 'O que é o #SAL', 'sal-theme' )     => '/quem-somos',
 			__( 'Acompanhe o Balanço', 'sal-theme' ) => '/balanco',
-			__( 'Clube de Vantagens', 'sal-theme' )  => '/clube-sal',
+			__( 'Clube do #SAL', 'sal-theme' )       => '/clube-sal',
 		];
 
 		echo '<ul class="sal-nav__list">';

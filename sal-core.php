@@ -1604,7 +1604,7 @@ function sal_core_instagram_list_shortcode( $atts ) {
 add_shortcode( 'sal_instagram_list', 'sal_core_instagram_list_shortcode' );
 
 /**
- * Shortcode para a página do Clube de Vantagens (Apoia.se). Permite
+ * Shortcode para a página do Clube do #SAL (Apoia.se). Permite
  * verificação de apoiadores através da API Apoia.se.
  */
 function sal_core_club_shortcode() {
@@ -1746,7 +1746,7 @@ function sal_core_do_setup() {
     $grafana_url = 'https://plotzki.grafana.net/public-dashboards/1c2b821b965a4ba8b6cd7c5c13b6c266';
     $home_id = $make_page( 'home', 'Home', "<h2>Últimos vídeos</h2>\n[sal_youtube count=\"6\"]\n\n<h2>Instagram</h2>\n[sal_instagram_list count=\"6\" columns=\"3\"]\n\n<h2>Assine a newsletter</h2>\n[sal_newsletter]" );
     $qs_id  = $make_page( 'quem-somos', 'Quem Somos', 'Somos o #SAL — vida no mar, conhecimento e comunidade.' );
-    $club_id = $make_page( 'clube-sal', 'Clube de Vantagens #SAL', 'Em breve novidades para os apoiadores do #SAL' );
+    $club_id = $make_page( 'clube-sal', 'Clube do #SAL', 'Em breve novidades para os apoiadores do #SAL' );
     $bal_id = $make_page( 'balanco', 'Acompanhe o Balanço', "<p>Dados em tempo quase real:</p>\n[sal_balance]\n\n<iframe src=\"$grafana_url\" width=\"100%\" height=\"720\" style=\"border:0;border-radius:12px;\" loading=\"lazy\"></iframe>" );
     $vid_id = $make_page( 'videos', 'Vídeos', '[sal_youtube count="12"]' );
     $ctt_id = $make_page( 'contato', 'Contato', '[sal_newsletter]' );
