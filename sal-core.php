@@ -1604,7 +1604,7 @@ function sal_core_instagram_list_shortcode( $atts ) {
 add_shortcode( 'sal_instagram_list', 'sal_core_instagram_list_shortcode' );
 
 /**
- * Shortcode para a página do Clube do #SAL (Apoia.se). Permite
+ * Shortcode para a página de Apoiadores do #SAL (Apoia.se). Permite
  * verificação de apoiadores através da API Apoia.se.
  */
 function sal_core_club_shortcode() {
