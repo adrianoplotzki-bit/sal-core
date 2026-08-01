@@ -86,7 +86,44 @@ function sal_theme_enqueue_assets() {
 		SAL_THEME_VERSION,
 		true             // footer: true (carrega após o DOM)
 	);
+
+	// ── Analytics (Umami, self-hosted) ───────────────────────────────────────
+	// Sem cookie e sem dado pessoal — é por isso que não há banner de
+	// consentimento. Ver INFRA.md §15 para a escolha.
+	//
+	// Não carrega para quem está logado: existe um único usuário no
+	// WordPress, e contar as próprias visitas distorceria justamente os
+	// números que o painel serve para ler.
+	if ( ! is_user_logged_in() ) {
+		wp_enqueue_script(
+			'sal-analytics',
+			'https://metricas.hashtagsal.com.br/script.js',
+			[],
+			null,   // null e não SAL_THEME_VERSION: o ?ver= é nosso, e o
+			        // arquivo é servido pelo Umami com o cache dele.
+			true
+		);
+	}
 }
+
+/**
+ * Acrescenta os atributos que o Umami exige na tag do script.
+ *
+ * `data-website-id` identifica o site e não é segredo — ele aparece no HTML
+ * de qualquer página. `defer` mantém a promessa do enqueue no rodapé: o
+ * script nunca bloqueia o render.
+ */
+function sal_theme_tag_analytics( $tag, $handle ) {
+	if ( 'sal-analytics' !== $handle ) {
+		return $tag;
+	}
+	return str_replace(
+		'<script ',
+		'<script defer data-website-id="f30b1892-9ea3-442a-b972-6379d8168651" ',
+		$tag
+	);
+}
+add_filter( 'script_loader_tag', 'sal_theme_tag_analytics', 10, 2 );
 
 // ---------------------------------------------------------------------------
 // Helper: último vídeo do canal (Etapa 6)
