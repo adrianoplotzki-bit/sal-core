@@ -30,6 +30,11 @@
     var INTERVALO_PESADO = 5 * 60 * 1000;
     var janelaAtual = '24h';
     var ultimoAgora = null, ultimaRota = null, chaveEnquadrada = null;
+
+    // "Já perguntei pela rota" — não "há rota". Fica true mesmo quando a
+    // busca falha, senão uma queda de rede deixaria o mapa parado na vista
+    // inicial para sempre, sem nunca enquadrar no barco.
+    var rotaConhecida = false;
     var falhasSeguidas = 0, ultimaBusca = 0;
 
     // Depois de tantas falhas seguidas em /agora, o painel avisa. Três
@@ -53,7 +58,42 @@
         { chave: 'agua_c', rotulo: 'Água', unidade: '°C' }
     ];
 
-    var mapa = L.map(elMapa, { scrollWheelZoom: false }).setView([-15, -40], 4);
+    /*
+     * ZOOM MÍNIMO 5 — não é gosto, é honestidade cartográfica.
+     *
+     * Boa parte dos fundeios está em água INTERIOR: Lagoa dos Patos, Guaíba,
+     * Baía de Todos os Santos, Baía da Ilha Grande, Cananéia. O basemap do
+     * OSM só desenha essas águas a partir do zoom 5 — no 4 elas viram terra
+     * firme, e um ponto corretamente ancorado em Tapes aparece no meio do
+     * Rio Grande do Sul.
+     *
+     * Foi medido em 2026-08-02 comparando o mesmo trecho nos dois zooms, e
+     * as coordenadas foram conferidas por geocodificação reversa: **não há
+     * erro de datum nem de projeção**, os pontos estão certos. O que erra
+     * abaixo do 5 é o mapa de fundo.
+     *
+     * Soma-se a isso a escala: no zoom 4 o disco de 5px do marcador cobre
+     * ~35 km, então até um ponto exatamente na linha de costa transborda
+     * para dentro do continente.
+     *
+     * Um mapa que afirma "estive aqui" apontando para o sertão é pior que um
+     * mapa que não deixa afastar tanto. Se um dia o basemap mudar, medir de
+     * novo antes de baixar este número.
+     */
+    var ZOOM_MINIMO = 5;
+
+    // Quantos lugares passados entram no enquadramento inicial. A costa
+    // inteira vai de -35° a -9°: enquadrar tudo joga o mapa para o zoom 4,
+    // que é justamente o que não se quer. Enquadrar SÓ o barco não mostraria
+    // nada de onde ele já passou. O meio-termo é o barco mais a vizinhança.
+    var LUGARES_NO_ENQUADRE = 12;
+
+    // Teto do enquadramento automático: sem ele, um punhado de lugares
+    // grudados levaria o mapa ao nível de rua já na abertura.
+    var ZOOM_MAXIMO_INICIAL = 9;
+
+    var mapa = L.map(elMapa, { scrollWheelZoom: false, minZoom: ZOOM_MINIMO })
+        .setView([-15, -40], ZOOM_MINIMO);
     var camadaArea = null, camadaRota = null, camadaLugares = null;
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -83,8 +123,45 @@
         return 'Posição aproximada, num raio de ' + agora.area.raio_km + ' km.';
     }
 
+    /*
+     * Os lugares mais próximos da referência — o barco, ou o fim da rota
+     * publicada.
+     *
+     * Enquadrar TODOS os lugares levava o mapa ao zoom 4, onde o basemap
+     * apaga as águas interiores e os pontos parecem estar em terra (ver
+     * ZOOM_MINIMO). Enquadrar só o barco não mostraria nada de onde ele já
+     * passou, que é o que o leitor quer ver. Abrir na vizinhança resolve os
+     * dois: escala honesta, e história por perto. O resto da costa continua
+     * a um zoom-out de distância.
+     *
+     * Sem referência — barco fora do ar e sem rota — cai no conjunto todo, e
+     * aí quem segura a escala é o `minZoom` do mapa.
+     *
+     * A distância é euclidiana em graus, com a longitude corrigida pelo
+     * cosseno da latitude. Não precisa ser geodésica: serve para ORDENAR, e
+     * a ordem não muda. Sem a correção, um grau de longitude a -30° valeria
+     * como um de latitude, e a comparação penalizaria o eixo errado.
+     */
+    function vizinhos(referencia, lugares) {
+        if (!lugares.length || !referencia.length) { return lugares; }
+
+        var ref = referencia[referencia.length - 1];
+        var k = Math.cos(ref[0] * Math.PI / 180);
+
+        return lugares.map(function (p) {
+            var dy = p[0] - ref[0];
+            var dx = (p[1] - ref[1]) * k;
+            return { p: p, d: dy * dy + dx * dx };
+        }).sort(function (a, b) {
+            return a.d - b.d;
+        }).slice(0, LUGARES_NO_ENQUADRE).map(function (x) {
+            return x.p;
+        });
+    }
+
     function desenharMapa(agora, rota) {
-        var limites = [];
+        var limites = [];        // o que sempre entra no enquadramento
+        var lugaresLatLon = [];  // os lugares passados, escolhidos à parte
 
         if (camadaArea) { mapa.removeLayer(camadaArea); camadaArea = null; }
         if (camadaRota) { mapa.removeLayer(camadaRota); camadaRota = null; }
@@ -112,7 +189,7 @@
                     fillColor: '#ea580c', fillOpacity: 1
                 });
                 if (lugar.nome) { m.bindPopup(escapar(lugar.nome)); }
-                limites.push([lugar.lat, lugar.lon]);
+                lugaresLatLon.push([lugar.lat, lugar.lon]);
                 return m;
             })).addTo(mapa);
         }
@@ -133,13 +210,21 @@
             '|' + (rota && rota.pontos ? rota.pontos.length : 0) +
             '|' + (rota && rota.lugares ? rota.lugares.length : 0);
 
-        if (limites.length && chave !== chaveEnquadrada) {
-            var caixa = L.latLngBounds(limites);
-            // Estende pelo círculo inteiro, não só pelo centro dele: senão o
-            // enquadramento cortaria metade da área publicada.
-            if (camadaArea) { caixa = caixa.extend(camadaArea.getBounds()); }
-            mapa.fitBounds(caixa, { padding: [24, 24] });
-            chaveEnquadrada = chave;
+        // Só enquadra depois de saber se há lugares. `/agora` chega antes de
+        // `/rota`, e enquadrar naquele instante daria um mapa só com o
+        // círculo do barco, que salta para trás um segundo depois quando os
+        // lugares chegam. "Ainda não sei" é diferente de "sei que não há" —
+        // e a flag distingue os dois, inclusive quando a busca falha.
+        if (chave !== chaveEnquadrada && rotaConhecida) {
+            var enquadre = limites.concat(vizinhos(limites, lugaresLatLon));
+            if (enquadre.length) {
+                var caixa = L.latLngBounds(enquadre);
+                // Estende pelo círculo inteiro, não só pelo centro dele:
+                // senão o enquadramento cortaria metade da área publicada.
+                if (camadaArea) { caixa = caixa.extend(camadaArea.getBounds()); }
+                mapa.fitBounds(caixa, { padding: [24, 24], maxZoom: ZOOM_MAXIMO_INICIAL });
+                chaveEnquadrada = chave;
+            }
         }
 
         if (elEstado) { elEstado.textContent = texto(agora); }
@@ -489,7 +574,14 @@
 
     function cicloPesado() {
         buscar(cfg.rota).then(function (rota) {
-            if (!rota) { return; }
+            var primeira = !rotaConhecida;
+            rotaConhecida = true;
+            if (!rota) {
+                // Falhou. Redesenha assim mesmo na primeira vez, para o
+                // enquadramento sair do lugar — com o que houver.
+                if (primeira) { desenharMapa(ultimoAgora, ultimaRota); }
+                return;
+            }
             ultimaRota = rota;
             desenharMapa(ultimoAgora, rota);
         });

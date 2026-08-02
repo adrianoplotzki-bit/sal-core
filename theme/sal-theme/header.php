@@ -26,10 +26,25 @@
 	<div class="sal-container sal-header__inner">
 
 		<!-- Logo -->
+		<?php
+		/*
+		 * O logo é a IMAGEM do arquivo real, nunca "#SAL" desenhado numa
+		 * fonte parecida. Até 2026-08-02 esta linha era texto em Bebas Neue
+		 * — perto do logo de verdade, e por isso mesmo enganoso: o traço do
+		 * "#" da marca não é o da fonte.
+		 *
+		 * `width`/`height` são os do ARQUIVO (264×183), não os exibidos: eles
+		 * existem para o navegador reservar o espaço antes de a imagem
+		 * chegar e não empurrar o menu para o lado. O tamanho na tela vem do
+		 * CSS.
+		 */
+		?>
 		<a class="sal-logo"
 		   href="<?php echo esc_url( home_url( '/' ) ); ?>"
 		   aria-label="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?> — início">
-			#SAL
+			<img src="<?php echo esc_url( get_template_directory_uri() . '/assets/img/logo-sal.png' ); ?>"
+			     alt="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>"
+			     width="264" height="183">
 		</a>
 
 		<!-- Menu principal (extraído para template-part) -->

@@ -20,7 +20,9 @@
 	<!-- Coluna 1: Identidade -->
 	<div class="sal-footer__col">
 		<a class="sal-footer__logo" href="<?php echo esc_url( home_url( '/' ) ); ?>" aria-label="<?php esc_attr_e( 'HashtagSal — início', 'sal-theme' ); ?>">
-			#SAL
+			<img src="<?php echo esc_url( get_template_directory_uri() . '/assets/img/logo-sal.png' ); ?>"
+			     alt="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>"
+			     width="264" height="183">
 		</a>
 		<p class="sal-footer__domain">hashtagsal.com.br</p>
 		<p class="sal-footer__mission">
