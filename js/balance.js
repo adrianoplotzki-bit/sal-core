@@ -101,9 +101,15 @@
         // visitados, então qualquer linha entre eles seria ficção.
         if (rota && rota.lugares && rota.lugares.length) {
             camadaLugares = L.layerGroup(rota.lugares.map(function (lugar) {
+                // Ponto pequeno com halo branco. Com 150 lugares numa costa,
+                // círculos grandes e opacos se sobrepõem e viram uma mancha
+                // contínua — deixam de dizer "estive aqui, aqui e aqui" e
+                // passam a dizer "estive nessa região inteira", que é
+                // justamente o que um marcador não deveria sugerir. O anel
+                // claro separa vizinhos encostados sem aumentar o desenho.
                 var m = L.circleMarker([lugar.lat, lugar.lon], {
-                    radius: 5, color: '#f59e0b', weight: 2,
-                    fillColor: '#f59e0b', fillOpacity: 0.9
+                    radius: 3.5, color: '#ffffff', weight: 1.5, opacity: 0.9,
+                    fillColor: '#ea580c', fillOpacity: 1
                 });
                 if (lugar.nome) { m.bindPopup(escapar(lugar.nome)); }
                 limites.push([lugar.lat, lugar.lon]);
