@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.16.1' );
+define( 'SAL_CORE_VERSION', '0.16.2' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -195,9 +195,33 @@ function sal_core_valida_ponto( $data ) {
         return 'ponto não é um objeto';
     }
 
-    $fields = array(
-        'lat'        => array( -90,    90 ),
-        'lon'        => array( -180,   180 ),
+    /*
+     * Dois pesos, de propósito.
+     *
+     * POSIÇÃO invalida o ponto: sem lat/lon confiáveis a linha não tem o que
+     * publicar, e uma coordenada absurda atravessaria a regra da bolha.
+     *
+     * MEDIÇÃO fora do intervalo vira NULL e o ponto passa. Um sensor
+     * quebrado precisa produzir um BURACO naquela série, nunca um apagão de
+     * tudo — e o gráfico já desenha buraco como linha interrompida.
+     *
+     * Isto não é teoria. Em 2026-08-02 o canal de sondagem do GO5 assumiu a
+     * `environment.water.temperature` no Signal K e passou a transmitir
+     * -6,5 °C. Como a validação recusava o PONTO, e o lote é tudo-ou-nada, o
+     * barco parou de reportar **posição, profundidade e bateria por 1h30** —
+     * o produtor acumulou 1578 amostras no buffer levando 400 a cada minuto,
+     * e o buffer nunca ia drenar sozinho, porque as amostras ruins ficariam
+     * lá para sempre envenenando todo lote seguinte.
+     *
+     * Publicar uma temperatura errada é ruim. Silenciar a telemetria inteira
+     * por causa dela é muito pior.
+     */
+    $posicao = array(
+        'lat' => array( -90,  90 ),
+        'lon' => array( -180, 180 ),
+    );
+
+    $medicoes = array(
         'sog'        => array( 0,      100 ),   // nós
         'cog'        => array( 0,      360 ),   // graus
         'awa'        => array( -180,   180 ),   // graus
@@ -213,11 +237,30 @@ function sal_core_valida_ponto( $data ) {
         'depth_max'  => array( 0,      12000 ),
         'water_temp' => array( -5,     60 ),    // °C — Signal K manda kelvin, converta antes
     );
+
     $clean = array();
-    foreach ( $fields as $name => $range ) {
+
+    foreach ( $posicao as $name => $range ) {
         $v = sal_core_valid_num( isset( $data[ $name ] ) ? $data[ $name ] : null, $range[0], $range[1] );
         if ( $v === false ) {
             return "campo {$name} fora do intervalo válido";
+        }
+        $clean[ $name ] = $v;
+    }
+
+    foreach ( $medicoes as $name => $range ) {
+        $bruto = isset( $data[ $name ] ) ? $data[ $name ] : null;
+        $v     = sal_core_valid_num( $bruto, $range[0], $range[1] );
+        if ( $v === false ) {
+            // Descartado, não recusado. Registra para o defeito ser
+            // diagnosticável — um buraco silencioso na série esconderia um
+            // sensor quebrado até alguém reparar no gráfico.
+            error_log( sprintf(
+                'sal-core: %s fora do intervalo (%s), gravado como NULL',
+                $name,
+                is_scalar( $bruto ) ? (string) $bruto : gettype( $bruto )
+            ) );
+            $v = null;
         }
         $clean[ $name ] = $v;
     }
