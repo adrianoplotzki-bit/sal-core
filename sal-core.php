@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.16.2' );
+define( 'SAL_CORE_VERSION', '0.16.3' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -235,7 +235,17 @@ function sal_core_valida_ponto( $data ) {
         'depth'      => array( 0,      12000 ), // metros (média do intervalo)
         'depth_min'  => array( 0,      12000 ),
         'depth_max'  => array( 0,      12000 ),
-        'water_temp' => array( -5,     60 ),    // °C — Signal K manda kelvin, converta antes
+        /*
+         * Água do mar congela por volta de -1,9 °C; água doce, a 0. O piso
+         * era -5, folgado demais: em 2026-08-02 deixou passar -3,2 °C do
+         * GO5 e o painel publicou aquilo como leitura.
+         *
+         * Apertar só ficou seguro depois de a medição fora da faixa virar
+         * NULL em vez de recusar o ponto. Com a regra antiga, faixa mais
+         * estreita significaria MAIS lotes recusados — ou seja, mais tempo
+         * com a telemetria inteira muda.
+         */
+        'water_temp' => array( -2,     60 ),    // °C — Signal K manda kelvin, converta antes
     );
 
     $clean = array();
