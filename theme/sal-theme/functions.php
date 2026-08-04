@@ -158,6 +158,13 @@ function sal_theme_descricao() {
 		$post = get_queried_object();
 		$texto = has_excerpt( $post ) ? get_the_excerpt( $post ) : $post->post_content;
 		$texto = wp_strip_all_tags( strip_shortcodes( $texto ), true );
+		// Decodifica ANTES de cortar e antes do esc_attr do final. O conteúdo
+		// no banco guarda aspas como `&quot;`, que o strip_tags não toca — e
+		// escapar de novo publicaria `&amp;quot;` literalmente no resultado
+		// do Google. Visto na /balanco/, que tem "sinais vitais" entre aspas.
+		// Decodificar aqui também faz o corte de 155 contar CARACTERES de
+		// verdade, e não os seis bytes de uma entidade.
+		$texto = html_entity_decode( $texto, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		$texto = trim( preg_replace( '/\s+/u', ' ', $texto ) );
 		if ( $texto !== '' ) {
 			// 155 caracteres é onde o Google costuma cortar. Cortar por
