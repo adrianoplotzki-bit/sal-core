@@ -126,6 +126,179 @@ function sal_theme_tag_analytics( $tag, $handle ) {
 add_filter( 'script_loader_tag', 'sal_theme_tag_analytics', 10, 2 );
 
 // ---------------------------------------------------------------------------
+// SEO: descrição, Open Graph, Twitter Card e dados estruturados
+// ---------------------------------------------------------------------------
+//
+// Escrito à mão, no tema, e não com plugin de SEO. Yoast ou AIOSEO seriam
+// uma dependência grande para o que aqui são umas poucas tags — e o
+// `aioseo_activation_redirect` que sobrou no banco mostra que esse filme já
+// passou uma vez neste site.
+//
+// O QUE ISTO RESOLVE, MEDIDO EM 2026-08-04
+// ----------------------------------------
+// O site não tinha NENHUMA meta description e NENHUMA tag Open Graph. Como
+// ~95% do tráfego chega sem referrer (descrição do YouTube, WhatsApp,
+// Instagram), colar o link em qualquer um desses lugares produzia texto
+// pelado: sem imagem, sem título, sem descrição. Era onde se perdia quem já
+// ia clicar.
+
+/**
+ * Descrição da página atual, em ~155 caracteres.
+ *
+ * Sai do conteúdo real da página, não de um campo inventado: o conteúdo vive
+ * no banco (ver §14 do CLAUDE.md) e é o que de fato está na tela. Um resumo
+ * escrito à parte envelhece separado da página e passa a mentir.
+ */
+function sal_theme_descricao() {
+	if ( is_front_page() ) {
+		return get_bloginfo( 'description' );
+	}
+
+	if ( is_singular() ) {
+		$post = get_queried_object();
+		$texto = has_excerpt( $post ) ? get_the_excerpt( $post ) : $post->post_content;
+		$texto = wp_strip_all_tags( strip_shortcodes( $texto ), true );
+		$texto = trim( preg_replace( '/\s+/u', ' ', $texto ) );
+		if ( $texto !== '' ) {
+			// 155 caracteres é onde o Google costuma cortar. Cortar por
+			// PALAVRA, nunca no meio de uma — descrição truncada em "manuten"
+			// lê-se como site quebrado.
+			if ( mb_strlen( $texto ) > 155 ) {
+				$texto = mb_substr( $texto, 0, 155 );
+				$corte = mb_strrpos( $texto, ' ' );
+				if ( $corte > 80 ) {
+					$texto = mb_substr( $texto, 0, $corte );
+				}
+				$texto .= '…';
+			}
+			return $texto;
+		}
+	}
+
+	return get_bloginfo( 'description' );
+}
+
+/**
+ * Imagem de compartilhamento.
+ *
+ * Imagem destacada da página quando existir; senão o hero, que é 1600×900 e
+ * já está otimizado. **Sempre devolve alguma coisa** — card sem imagem no
+ * WhatsApp encolhe para uma linha de texto e perde quase toda a atenção que
+ * o link renderia.
+ */
+function sal_theme_imagem_social() {
+	if ( is_singular() && has_post_thumbnail() ) {
+		$url = get_the_post_thumbnail_url( get_queried_object_id(), 'full' );
+		if ( $url ) {
+			return $url;
+		}
+	}
+	return SAL_THEME_URI . '/assets/img/hero.jpg';
+}
+
+/**
+ * Título para compartilhamento, sem o sufixo do site.
+ *
+ * O `wp_get_document_title()` devolve "Vídeos – #SAL". No card social o nome
+ * do site já aparece embaixo, em `og:site_name`, então repetir vira
+ * "Vídeos – #SAL — #SAL".
+ */
+function sal_theme_titulo_social() {
+	if ( is_front_page() ) {
+		return get_bloginfo( 'name' ) . ' — ' . get_bloginfo( 'description' );
+	}
+	if ( is_singular() ) {
+		return get_the_title( get_queried_object_id() );
+	}
+	return wp_get_document_title();
+}
+
+function sal_theme_seo_meta() {
+	$descricao = sal_theme_descricao();
+	$titulo    = sal_theme_titulo_social();
+	$imagem    = sal_theme_imagem_social();
+	$url       = is_singular() ? get_permalink( get_queried_object_id() ) : home_url( '/' );
+
+	echo "\n<!-- SEO do sal-theme -->\n";
+
+	printf( '<meta name="description" content="%s">' . "\n", esc_attr( $descricao ) );
+
+	printf( '<meta property="og:type" content="%s">' . "\n", is_front_page() ? 'website' : 'article' );
+	printf( '<meta property="og:site_name" content="%s">' . "\n", esc_attr( get_bloginfo( 'name' ) ) );
+	printf( '<meta property="og:locale" content="pt_BR">' . "\n" );
+	printf( '<meta property="og:title" content="%s">' . "\n", esc_attr( $titulo ) );
+	printf( '<meta property="og:description" content="%s">' . "\n", esc_attr( $descricao ) );
+	printf( '<meta property="og:url" content="%s">' . "\n", esc_url( $url ) );
+	printf( '<meta property="og:image" content="%s">' . "\n", esc_url( $imagem ) );
+	// Largura e altura deixam o WhatsApp e o Facebook reservarem o espaço do
+	// card sem baixar a imagem antes — sem elas o preview às vezes aparece
+	// sem foto na primeira vez que o link é colado.
+	printf( '<meta property="og:image:width" content="1600">' . "\n" );
+	printf( '<meta property="og:image:height" content="900">' . "\n" );
+
+	printf( '<meta name="twitter:card" content="summary_large_image">' . "\n" );
+	printf( '<meta name="twitter:title" content="%s">' . "\n", esc_attr( $titulo ) );
+	printf( '<meta name="twitter:description" content="%s">' . "\n", esc_attr( $descricao ) );
+	printf( '<meta name="twitter:image" content="%s">' . "\n", esc_url( $imagem ) );
+}
+add_action( 'wp_head', 'sal_theme_seo_meta', 5 );
+
+/**
+ * Dados estruturados (JSON-LD).
+ *
+ * Só na home, de propósito: `Organization` e `WebSite` descrevem o site
+ * inteiro, e repeti-los em toda página não acrescenta nada e ainda dá ao
+ * Google a chance de escolher a cópia errada como canônica.
+ *
+ * Nada aqui declara faturamento, doação ou qualquer número — o canal não
+ * abre dados financeiros e não pretende abrir (§5 do CLAUDE.md).
+ */
+function sal_theme_json_ld() {
+	if ( ! is_front_page() ) {
+		return;
+	}
+
+	$dados = [
+		'@context' => 'https://schema.org',
+		'@graph'   => [
+			[
+				'@type'       => 'Organization',
+				'@id'         => home_url( '/#organizacao' ),
+				'name'        => get_bloginfo( 'name' ),
+				'url'         => home_url( '/' ),
+				'description' => get_bloginfo( 'description' ),
+				'logo'        => [
+					'@type'  => 'ImageObject',
+					'url'    => SAL_THEME_URI . '/assets/img/logo-sal.png',
+					'width'  => 264,
+					'height' => 183,
+				],
+				'sameAs'      => [
+					'https://www.youtube.com/user/hashtagsal',
+					'https://apoia.se/hashtagsal',
+				],
+			],
+			[
+				'@type'           => 'WebSite',
+				'@id'             => home_url( '/#site' ),
+				'url'             => home_url( '/' ),
+				'name'            => get_bloginfo( 'name' ),
+				'description'     => get_bloginfo( 'description' ),
+				'inLanguage'      => 'pt-BR',
+				'publisher'       => [ '@id' => home_url( '/#organizacao' ) ],
+			],
+		],
+	];
+
+	echo "\n" . '<script type="application/ld+json">'
+		// JSON_UNESCAPED_UNICODE: sem isso "oceano" e os acentos viram ã
+		// no fonte — válido, mas ilegível para quem for depurar isto depois.
+		. wp_json_encode( $dados, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		. '</script>' . "\n";
+}
+add_action( 'wp_head', 'sal_theme_json_ld', 6 );
+
+// ---------------------------------------------------------------------------
 // Helper: último vídeo do canal (Etapa 6)
 // ---------------------------------------------------------------------------
 
