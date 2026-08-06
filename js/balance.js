@@ -41,12 +41,25 @@
     // minutos de silêncio: menos que isso pisca à toa em rede de celular.
     var FALHAS_PARA_AVISAR = 3;
 
+    /*
+     * O rótulo NÃO diz "a motor". Decisão do Adriano em 2026-08-06.
+     *
+     * Quem produz este estado é o `signalk-autostate`, no Cerbo, e ele marca
+     * `motoring` sempre que o motor gira com o barco em movimento. Só que o
+     * motor também é ligado para CARREGAR A BATERIA — e aí o painel afirmaria
+     * uma escolha de navegação que não foi feita. Dizer só "navegando" é o
+     * que se sabe com certeza: o barco está andando.
+     *
+     * `sailing` continua nomeando a vela porque ali não há ambiguidade: o
+     * autostate só o emite com o motor desligado e o barco em movimento, e é
+     * uma afirmação que o Adriano quer fazer.
+     */
     var ESTADOS = {
         moored: 'atracado',
         anchored: 'fundeado',
         sailing: 'navegando à vela',
-        motoring: 'navegando a motor',
-        'motor sailing': 'a vela e motor',
+        motoring: 'navegando',
+        'motor sailing': 'navegando',
         driving: 'navegando',
         'not under command': 'sem governo'
     };
