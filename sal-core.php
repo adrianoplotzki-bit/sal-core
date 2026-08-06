@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.18.1' );
+define( 'SAL_CORE_VERSION', '0.18.2' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -900,8 +900,17 @@ function sal_core_metricas() {
         //
         // O custo assumido está no §5 do CLAUDE.md, junto com a razão. O
         // rumo continua retido.
+        //
+        // `escala_minima` — o eixo cobre 0 a 10 nós MESMO quando o barco
+        // está parado. Sem isso o eixo se ajusta ao que há, e fundeado o que
+        // há é ruído: o GPS oscila entre 0,05 e 0,3 nó enquanto o barco gira
+        // na poita. Ampliado até ocupar a caixa inteira, esse ruído vira uma
+        // serra dramática, e o gráfico afirma movimento onde não houve
+        // nenhum. Com o piso de 10 nós, fundeado é uma linha rente ao zero —
+        // que é a verdade — e navegar a 3–7 nós continua usando boa parte da
+        // altura. Acima de 10 o eixo cresce normalmente: é piso, não teto.
         'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => false,
-                                   'limites' => array( 0, null ) ),
+                                   'limites' => array( 0, null ), 'escala_minima' => array( 0, 10 ) ),
     );
 }
 
@@ -1339,6 +1348,9 @@ function sal_core_get_series( WP_REST_Request $request ) {
         }
         if ( ! empty( $m['limites'] ) ) {
             $serie['limites'] = $m['limites'];
+        }
+        if ( ! empty( $m['escala_minima'] ) ) {
+            $serie['escala_minima'] = $m['escala_minima'];
         }
 
         $series[ $chave ] = $serie;

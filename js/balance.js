@@ -483,6 +483,19 @@
             if (max - min < 1e-9) { max = min + 1; }   // tudo colado no limite
         }
 
+        // Escala mínima: o eixo cobre pelo menos esta faixa, sempre. É PISO,
+        // não teto — passou dela, cresce normalmente.
+        //
+        // Existe porque eixo que se ajusta ao que há transforma ruído em
+        // notícia: fundeado, a velocidade oscila décimos de nó e o gráfico
+        // desenhava uma serra ocupando a caixa inteira, afirmando um
+        // movimento que não houve.
+        var esc = serie.escala_minima;
+        if (esc) {
+            if (esc[0] !== null && esc[0] !== undefined) { min = Math.min(min, esc[0]); }
+            if (esc[1] !== null && esc[1] !== undefined) { max = Math.max(max, esc[1]); }
+        }
+
         // t0/t1 vêm do recorte COMUM da resposta, não do primeiro e último
         // ponto desta série. Cada gráfico com o próprio eixo faria curvas de
         // durações diferentes parecerem alinhadas.
