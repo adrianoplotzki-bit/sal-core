@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.17.2' );
+define( 'SAL_CORE_VERSION', '0.18.0' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -706,12 +706,49 @@ function sal_core_get_agora() {
 }
 
 /**
+ * Intervalo pedido pelo leitor (`?de=`&`ate=`, unix), ou null.
+ *
+ * Serve `/rota` e `/series` com a MESMA leitura dos parâmetros: é o que faz
+ * mapa e gráficos mostrarem o mesmo pedaço de tempo quando a régua se move.
+ * Duas interpretações separadas divergiriam no primeiro ajuste, e o leitor
+ * veria uma rota que não corresponde às curvas ao lado dela.
+ *
+ * Não é filtro de segurança: o que pode ou não ser publicado continua sendo
+ * decidido pela regra da bolha, ponto a ponto, depois daqui. Recortar o tempo
+ * não revela nada — `/rota` já devolvia o `ts` de cada ponto.
+ */
+function sal_core_intervalo_pedido( WP_REST_Request $request ) {
+    $de  = $request->get_param( 'de' );
+    $ate = $request->get_param( 'ate' );
+    if ( ! is_numeric( $de ) || ! is_numeric( $ate ) ) {
+        return null;
+    }
+
+    $de  = (int) $de;
+    $ate = (int) $ate;
+
+    // Piso de 5 minutos: abaixo disso o bloco de agregação degenera e o
+    // gráfico vira um traço sem informação. Teto no futuro próximo para uma
+    // régua arrastada até o fim não pedir o ano que vem.
+    if ( $ate - $de < 300 ) {
+        return null;
+    }
+    if ( $de < 946684800 || $ate > time() + DAY_IN_SECONDS ) {   // 2000-01-01
+        return null;
+    }
+
+    return array( $de, $ate );
+}
+
+/**
  * GET /sal/v1/rota — os lugares por onde o barco já passou, precisos.
  *
  * Precisos porque já foram deixados para trás: só sai o que está a duas
  * células ou mais da atual, o que garante pelo menos uma célula inteira
  * (~110 km) de separação. O filtro roda a cada leitura, então voltar a um
  * lugar já publicado o esconde de novo sem ninguém precisar marcar nada.
+ *
+ * Aceita `?de=`&`ate=` (unix) para acompanhar a régua de período do painel.
  */
 function sal_core_get_rota( WP_REST_Request $request ) {
     global $wpdb;
@@ -720,18 +757,64 @@ function sal_core_get_rota( WP_REST_Request $request ) {
     $limite = (int) $request->get_param( 'limite' );
     $limite = ( $limite > 0 && $limite <= 5000 ) ? $limite : 2000;
 
+    $intervalo = sal_core_intervalo_pedido( $request );
+
     // visivel = 0 é o veto manual: serve para tirar do ar um ponto sem apagá-lo
     // do banco. Nasceu para a revisão das estrelas importadas do Google Maps,
     // onde entram lugares que não são do barco (casa de amigo, oficina...).
-    $linhas = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT ts, lat, lon, sog, nome, tipo FROM {$t}
-             WHERE lat IS NOT NULL AND lon IS NOT NULL AND visivel = 1
-             ORDER BY ts ASC, id ASC LIMIT %d",
+    //
+    // Rota e lugares saem em consultas SEPARADAS, e isso é correção de um
+    // defeito real: eram uma só, com `ORDER BY ts ASC LIMIT 2000`, o que
+    // devolvia os 2000 registros MAIS ANTIGOS. Como os lugares vêm de 2024,
+    // eles comiam as primeiras vagas e a rota era cortada no meio — em
+    // 2026-08-06 havia 4811 pontos e o mapa só chegava ao 1839º, sem nada na
+    // tela dizendo que o resto existia. Truncar o passado recente é o pior
+    // corte possível num painel de navegação.
+    //
+    // Um `prepare()` só, sem fragmento já preparado embutido em outro: o
+    // segundo passe reinterpretaria qualquer `%` que aparecesse no valor
+    // escapado. Aqui os valores são datas e não têm `%`, mas o padrão é a
+    // armadilha, não este caso.
+    $molde = "SELECT ts, lat, lon, sog FROM (
+                SELECT ts, lat, lon, sog, id FROM {$t}
+                WHERE tipo = 'rota' AND lat IS NOT NULL AND lon IS NOT NULL
+                  AND visivel = 1%s
+                ORDER BY ts DESC, id DESC LIMIT %%d
+             ) recentes ORDER BY ts ASC, id ASC";
+
+    if ( $intervalo ) {
+        $sql = $wpdb->prepare(
+            sprintf( $molde, ' AND ts >= %s AND ts <= %s' ),
+            gmdate( 'Y-m-d H:i:s', $intervalo[0] ),
+            gmdate( 'Y-m-d H:i:s', $intervalo[1] ),
             $limite
-        ),
+        );
+    } else {
+        $sql = $wpdb->prepare( sprintf( $molde, '' ), $limite );
+    }
+
+    $rota = $wpdb->get_results( $sql, ARRAY_A );
+
+    // Lugares NÃO são recortados pelo período. O `ts` deles é a data da
+    // visita, importada do Google Maps: filtrá-los pela régua faria o mapa
+    // esvaziar-se ao olhar para ontem, e eles não são série temporal — são o
+    // contexto de onde o barco já esteve.
+    $marcados = $wpdb->get_results(
+        "SELECT ts, lat, lon, nome FROM {$t}
+         WHERE tipo = 'lugar' AND lat IS NOT NULL AND lon IS NOT NULL AND visivel = 1
+         ORDER BY ts ASC, id ASC LIMIT 1000",
         ARRAY_A
     );
+
+    $linhas = array();
+    foreach ( $rota as $linha ) {
+        $linha['tipo'] = 'rota';
+        $linhas[]      = $linha;
+    }
+    foreach ( $marcados as $linha ) {
+        $linha['tipo'] = 'lugar';
+        $linhas[]      = $linha;
+    }
 
     $celula  = sal_core_celula_atual();
     $pontos  = array();
@@ -1085,17 +1168,26 @@ function sal_core_corte_velocidade() {
 /**
  * GET /sal/v1/series — histórico dos sinais vitais.
  *
- * Parâmetro `janela`: 24h | 7d | 30d | tudo (padrão 24h).
+ * Parâmetro `janela`: 24h | 7d | 30d | tudo (padrão 24h). Como alternativa,
+ * `de` e `ate` (unix) recortam qualquer pedaço do passado — é o que a régua
+ * de período do painel usa para ir a uma tarde específica de três dias atrás.
  *
  * Agrega em blocos dimensionados para caber ~240 pontos na tela, qualquer que
  * seja a janela. Sem isso, 30 dias amostrados a cada minuto seriam 43 mil
  * pontos no navegador de quem abrir a página pelo celular no meio do mar.
+ *
+ * O corolário é o que torna a régua útil: como o bloco vem do INTERVALO
+ * PEDIDO, aproximar não perde nada — pelo contrário, entrega resolução mais
+ * fina. Nada é reamostrado no banco; a tabela guarda todos os pontos e a
+ * agregação é sempre de leitura.
  */
 function sal_core_get_series( WP_REST_Request $request ) {
     global $wpdb;
     $t = $wpdb->prefix . 'sal_track';
 
     $janelas = array(
+        '1h'   => HOUR_IN_SECONDS,
+        '6h'   => 6 * HOUR_IN_SECONDS,
         '24h'  => DAY_IN_SECONDS,
         '7d'   => 7 * DAY_IN_SECONDS,
         '30d'  => 30 * DAY_IN_SECONDS,
@@ -1106,22 +1198,56 @@ function sal_core_get_series( WP_REST_Request $request ) {
         $janela = '24h';
     }
 
-    $desde_sql = null;
-    if ( $janelas[ $janela ] > 0 ) {
-        $desde_sql = gmdate( 'Y-m-d H:i:s', time() - $janelas[ $janela ] );
-    }
+    // A extensão do registro inteiro. Vai na resposta porque é o que dá
+    // limites à régua: sem saber onde a história começa, o painel precisaria
+    // de uma segunda requisição só para desenhar o controle.
+    $tudo = $wpdb->get_row( "SELECT MIN(ts) AS de, MAX(ts) AS ate FROM {$t} WHERE tipo = 'rota'", ARRAY_A );
+    $extensao = empty( $tudo['de'] ) ? null : array(
+        'de_unix'  => (int) strtotime( $tudo['de'] . ' UTC' ),
+        'ate_unix' => (int) strtotime( $tudo['ate'] . ' UTC' ),
+    );
+
+    $intervalo = sal_core_intervalo_pedido( $request );
 
     $onde = "WHERE tipo = 'rota'";
-    if ( $desde_sql ) {
-        $onde .= $wpdb->prepare( ' AND ts >= %s', $desde_sql );
+    if ( $intervalo ) {
+        $janela = 'custom';
+        $onde  .= $wpdb->prepare(
+            ' AND ts >= %s AND ts <= %s',
+            gmdate( 'Y-m-d H:i:s', $intervalo[0] ),
+            gmdate( 'Y-m-d H:i:s', $intervalo[1] )
+        );
+    } elseif ( $janelas[ $janela ] > 0 ) {
+        $onde .= $wpdb->prepare( ' AND ts >= %s', gmdate( 'Y-m-d H:i:s', time() - $janelas[ $janela ] ) );
     }
 
     $extremos = $wpdb->get_row( "SELECT MIN(ts) AS de, MAX(ts) AS ate FROM {$t} {$onde}", ARRAY_A );
+
+    // Com intervalo explícito, o eixo é o PEDIDO, não o que há de dado dentro
+    // dele. É o que faz a régua e o gráfico contarem a mesma história: se o
+    // barco ficou seis horas calado, o certo é um buraco de seis horas no
+    // lugar certo — e não um eixo que encolhe até o pedaço que sobrou,
+    // fazendo o silêncio desaparecer justamente ao ser procurado.
     if ( empty( $extremos['de'] ) ) {
-        return array( 'janela' => $janela, 'bloco_s' => 0, 'series' => array() );
+        $vazio = array(
+            'janela'   => $janela,
+            'bloco_s'  => 0,
+            'series'   => array(),
+            'extensao' => $extensao,
+        );
+        if ( $intervalo ) {
+            $vazio['de_unix']  = $intervalo[0];
+            $vazio['ate_unix'] = $intervalo[1];
+            $vazio['de']       = gmdate( 'c', $intervalo[0] );
+            $vazio['ate']      = gmdate( 'c', $intervalo[1] );
+        }
+        return $vazio;
     }
 
-    $span  = max( 60, strtotime( $extremos['ate'] . ' UTC' ) - strtotime( $extremos['de'] . ' UTC' ) );
+    $span = $intervalo
+        ? $intervalo[1] - $intervalo[0]
+        : strtotime( $extremos['ate'] . ' UTC' ) - strtotime( $extremos['de'] . ' UTC' );
+    $span  = max( 60, $span );
     $bloco = max( 60, (int) ceil( $span / 240 ) );
 
     // TIMESTAMPDIFF em vez de UNIX_TIMESTAMP: o segundo interpreta o DATETIME
@@ -1226,8 +1352,8 @@ function sal_core_get_series( WP_REST_Request $request ) {
     // à previsão a diferença entre as duas médias põe as curvas na mesma
     // escala. O que sobra de diferença entre elas é o que interessa — a
     // defasagem de fase, que é o atraso do estuário.
-    $de_unix  = (int) ( floor( strtotime( $extremos['de'] . ' UTC' ) / $bloco ) * $bloco );
-    $ate_unix = (int) ( floor( strtotime( $extremos['ate'] . ' UTC' ) / $bloco ) * $bloco );
+    $de_unix  = (int) ( floor( ( $intervalo ? $intervalo[0] : strtotime( $extremos['de'] . ' UTC' ) ) / $bloco ) * $bloco );
+    $ate_unix = (int) ( floor( ( $intervalo ? $intervalo[1] : strtotime( $extremos['ate'] . ' UTC' ) ) / $bloco ) * $bloco );
 
     $ultimo_ponto = sal_core_ultimo_ponto();
     if ( $ultimo_ponto && isset( $series['profundidade_m'] ) ) {
@@ -1285,6 +1411,7 @@ function sal_core_get_series( WP_REST_Request $request ) {
         'ate'      => gmdate( 'c', $ate_unix ),
         'de_unix'  => $de_unix,
         'ate_unix' => $ate_unix,
+        'extensao' => $extensao,
         'series'   => $series,
     );
 }
@@ -1490,7 +1617,14 @@ function sal_core_balance_shortcode( $atts ) {
         'fuso_horas' => (float) get_option( 'gmt_offset', 0 ),
     ) );
 
-    $janelas = array( '24h' => '24 h', '7d' => '7 dias', '30d' => '30 dias', 'tudo' => 'Tudo' );
+    $janelas = array(
+        '1h'   => '1 h',
+        '6h'   => '6 h',
+        '24h'  => '24 h',
+        '7d'   => '7 dias',
+        '30d'  => '30 dias',
+        'tudo' => 'Tudo',
+    );
 
     ob_start();
     ?>
@@ -1502,13 +1636,34 @@ function sal_core_balance_shortcode( $atts ) {
 
         <div class="sal-balanco__leituras" id="sal-balance-cartoes"></div>
 
-        <div class="sal-balanco__periodo" role="group" aria-label="Período do histórico">
+        <div class="sal-balanco__periodo" role="group" aria-label="Duração do período">
             <?php foreach ( $janelas as $chave => $rotulo ) : ?>
                 <button type="button" data-janela="<?php echo esc_attr( $chave ); ?>"
                     <?php echo '24h' === $chave ? 'class="is-ativo" aria-pressed="true"' : 'aria-pressed="false"'; ?>>
                     <?php echo esc_html( $rotulo ); ?>
                 </button>
             <?php endforeach; ?>
+        </div>
+
+        <?php
+        /*
+         * Régua de período. Os botões escolhem a DURAÇÃO; ela escolhe QUANDO.
+         * São dois controles porque um `input[type=range]` tem uma alça só, e
+         * dois deslizadores para marcar começo e fim é justamente o padrão
+         * que não funciona com o polegar num barco balançando.
+         *
+         * Nasce escondida: sem saber a extensão do registro não há como
+         * mapear a posição da alça em tempo, e um controle que aparece antes
+         * de significar alguma coisa convida a arrastar para nada.
+         */
+        ?>
+        <div class="sal-balanco__regua" id="sal-balance-regua" hidden>
+            <input type="range" id="sal-balance-quando" min="0" max="1000" value="1000" step="1"
+                aria-label="Quando, dentro do histórico">
+            <div class="sal-balanco__regua-rodape">
+                <span id="sal-balance-intervalo"></span>
+                <button type="button" id="sal-balance-agora" hidden>Voltar para agora</button>
+            </div>
         </div>
 
         <div class="sal-balanco__graficos" id="sal-balance-graficos"></div>

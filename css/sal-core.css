@@ -200,6 +200,88 @@
     border-color: var(--sal-ink, #111827);
 }
 
+/* ─── Régua de período ─────────────────────────────────────────────────── */
+.sal-balanco__regua {
+    margin: -0.5rem 0 1.2rem;
+}
+.sal-balanco__regua input[type="range"] {
+    display: block;
+    width: 100%;
+    margin: 0;
+    /* Alvo generoso: o dedo mira aqui num barco em movimento. 44 px é o
+       mínimo que a Apple e o Google recomendam para toque, e a régua é o
+       único controle contínuo do painel. */
+    height: 2.75rem;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.sal-balanco__regua input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--sal-border, #e5e7eb);
+}
+.sal-balanco__regua input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--sal-border, #e5e7eb);
+}
+.sal-balanco__regua input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-top: -0.55rem;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: var(--sal-ink, #111827);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.sal-balanco__regua input[type="range"]::-moz-range-thumb {
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: var(--sal-ink, #111827);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.sal-balanco__regua input[type="range"]:focus-visible {
+    outline: 2px solid var(--sal-ink, #111827);
+    outline-offset: 4px;
+}
+.sal-balanco__regua-rodape {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--sal-muted, #6b7280);
+}
+.sal-balanco__regua-rodape button {
+    padding: 0.28rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    cursor: pointer;
+    color: var(--sal-ink, #111827);
+    background: transparent;
+    border: 2px solid var(--sal-border, #e5e7eb);
+    border-radius: 999px;
+}
+.sal-balanco__regua-rodape button:hover {
+    border-color: var(--sal-muted, #6b7280);
+}
+/* [hidden] perde para a especificidade das regras acima em alguns
+   navegadores; sem isto o botão "voltar para agora" ficaria visível o tempo
+   todo, oferecendo desfazer algo que ninguém fez. */
+.sal-balanco__regua[hidden],
+.sal-balanco__regua-rodape button[hidden] {
+    display: none;
+}
+
 /* ─── Gráficos ─────────────────────────────────────────────────────────── */
 .sal-gr {
     margin: 0 0 1.25rem;

@@ -31,6 +31,35 @@
     var janelaAtual = '24h';
     var ultimoAgora = null, ultimaRota = null, chaveEnquadrada = null;
 
+    /*
+     * RÉGUA DE PERÍODO — dois controles, e a divisão é proposital.
+     *
+     * Os botões escolhem a DURAÇÃO da janela; a régua escolhe QUANDO ela cai.
+     * Um `input[type=range]` tem uma alça só, e marcar começo e fim com dois
+     * deslizadores é justamente o padrão que falha com o polegar num barco
+     * balançando.
+     *
+     * `fimEscolhido` é o instante em que a janela TERMINA, ou null para "ao
+     * vivo". A distinção não é cosmética:
+     *
+     * - Ao vivo, o pedido vai como `?janela=`, e quem calcula "agora" é o
+     *   SERVIDOR. Se dependesse do relógio do aparelho, um celular adiantado
+     *   uma hora pediria um pedaço de futuro e receberia gráfico vazio, sem
+     *   nada na tela explicando por quê.
+     * - Fixado, o pedido vai como `?de=&ate=`, e as pontas da régua são
+     *   timestamps que vieram do servidor (`extensao`). O relógio de quem lê
+     *   não entra na conta em nenhum dos dois casos.
+     */
+    var DURACOES = { '1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800, '30d': 2592000, tudo: 0 };
+    var PASSOS = 1000;
+    var fimEscolhido = null;
+    var extensao = null;
+    var elRegua = document.getElementById('sal-balance-regua');
+    var elQuando = document.getElementById('sal-balance-quando');
+    var elIntervalo = document.getElementById('sal-balance-intervalo');
+    var elAgora = document.getElementById('sal-balance-agora');
+    var adiar = null;
+
     // "Já perguntei pela rota" — não "há rota". Fica true mesmo quando a
     // busca falha, senão uma queda de rede deixaria o mapa parado na vista
     // inicial para sempre, sem nunca enquadrar no barco.
@@ -251,15 +280,26 @@
                 color: '#dc2626', weight: 2,
                 fillColor: '#dc2626', fillOpacity: 0.12
             }).addTo(mapa);
-            limites.push([agora.area.lat, agora.area.lon]);
+            // Com um período do passado fixado, o círculo continua desenhado
+            // — tirar "onde ele está" do mapa seria pior — mas fica FORA do
+            // enquadramento. Senão o mapa teria de conter o trecho de então e
+            // a posição de agora ao mesmo tempo, e afastaria até caber os
+            // dois, que é exatamente o oposto de aproximar num momento.
+            if (fimEscolhido === null) {
+                limites.push([agora.area.lat, agora.area.lon]);
+            }
         }
 
         // Reenquadra só quando o que há para mostrar muda de fato. Com o
         // painel atualizando a cada minuto, um fitBounds por ciclo desfaria o
         // zoom e o arrasto do leitor sem parar.
+        // O período entra na chave: dois trechos diferentes podem ter a MESMA
+        // contagem de pontos, e sem ele o mapa ficaria parado no enquadramento
+        // anterior ao arrastar a régua — parecendo que o controle não pegou.
         var chave = (agora && agora.area ? agora.area.lat + ',' + agora.area.lon + ',' + agora.area.raio_km : '-') +
             '|' + (rota && rota.pontos ? rota.pontos.length : 0) +
-            '|' + (rota && rota.lugares ? rota.lugares.length : 0);
+            '|' + (rota && rota.lugares ? rota.lugares.length : 0) +
+            '|' + janelaAtual + '@' + fimEscolhido;
 
         // Só enquadra depois de saber se há lugares. `/agora` chega antes de
         // `/rota`, e enquadrar naquele instante daria um mapa só com o
@@ -589,23 +629,131 @@
 
     function desenharGraficos(dados) {
         if (!elGraficos) { return; }
+
+        // A extensão do registro chega junto com as séries — é o que dá
+        // pontas à régua sem uma segunda requisição só para isso.
+        if (dados && dados.extensao) {
+            extensao = dados.extensao;
+            atualizarRegua();
+        }
+
         var html = '';
         if (dados && dados.series) {
             Object.keys(dados.series).forEach(function (chave) {
                 html += svgGrafico(chave, dados.series[chave], dados.de_unix, dados.ate_unix);
             });
         }
-        elGraficos.innerHTML = html ||
-            '<p class="sal-balanco__vazio">Ainda não há histórico suficiente para traçar. ' +
-            'Os gráficos aparecem quando o Balanço começar a transmitir.</p>';
+
+        // Vazio tem duas causas diferentes, e confundi-las faz o painel
+        // parecer quebrado: "ainda não começou" é do site, "o barco não
+        // transmitiu nessas horas" é do barco. Ao aproximar num silêncio, a
+        // segunda é a resposta certa — e é uma resposta, não um defeito.
+        elGraficos.innerHTML = html || (fimEscolhido !== null
+            ? '<p class="sal-balanco__vazio">O Balanço não transmitiu nesse período. ' +
+              'Arraste a régua ou escolha uma janela maior.</p>'
+            : '<p class="sal-balanco__vazio">Ainda não há histórico suficiente para traçar. ' +
+              'Os gráficos aparecem quando o Balanço começar a transmitir.</p>');
         desenharMare();
+    }
+
+    /* ----------------------------------------------------- régua e período */
+
+    function duracao() { return DURACOES[janelaAtual] || 0; }
+
+    // As pontas da régua: a janela mais antiga que cabe inteira no registro,
+    // e a mais recente. Null quando não há como arrastar — histórico mais
+    // curto que a própria janela, ou "Tudo", que já é o registro inteiro.
+    function limitesRegua() {
+        var d = duracao();
+        if (!d || !extensao) { return null; }
+        var min = extensao.de_unix + d;
+        var max = extensao.ate_unix;
+        return max - min > 60 ? { min: min, max: max } : null;
+    }
+
+    function intervaloAtual() {
+        if (fimEscolhido === null) { return null; }
+        var d = duracao();
+        return d ? { de: fimEscolhido - d, ate: fimEscolhido } : null;
+    }
+
+    function paramsPeriodo() {
+        var iv = intervaloAtual();
+        return iv
+            ? '?de=' + iv.de + '&ate=' + iv.ate
+            : '?janela=' + encodeURIComponent(janelaAtual);
+    }
+
+    function rotuloIntervalo() {
+        var iv = intervaloAtual();
+        if (!iv) { return ''; }
+        var a = partes(iv.de), b = partes(iv.ate);
+        // Mesmo dia: repetir a data dos dois lados só rouba espaço na tela
+        // estreita, que é onde este painel é lido.
+        return a.dia === b.dia
+            ? a.dia + ', ' + a.hora + ' às ' + b.hora
+            : a.dia + ' ' + a.hora + ' → ' + b.dia + ' ' + b.hora;
+    }
+
+    function atualizarRegua() {
+        if (!elRegua) { return; }
+        var lim = limitesRegua();
+        // Some quando não há o que arrastar — MAS não quando alguém chegou
+        // por um link com período fixado e a janela dele não permite andar.
+        // Esconder ali trancaria a pessoa no passado sem botão de volta.
+        elRegua.hidden = !lim && fimEscolhido === null;
+        if (elQuando) { elQuando.disabled = !lim; }
+        if (elAgora) { elAgora.hidden = fimEscolhido === null; }
+        if (elIntervalo) {
+            elIntervalo.textContent = fimEscolhido === null
+                ? 'Ao vivo — arraste para trás para ver um período anterior.'
+                : rotuloIntervalo();
+        }
+        if (!lim || !elQuando) { return; }
+        var v = fimEscolhido === null
+            ? PASSOS
+            : Math.round((fimEscolhido - lim.min) / (lim.max - lim.min) * PASSOS);
+        elQuando.value = String(Math.max(0, Math.min(PASSOS, v)));
+    }
+
+    // O endereço carrega o período para o link poder ser compartilhado: "olha
+    // o vento nessa tarde" vale muito mais que "abre e arrasta até uns três
+    // dias atrás". replaceState, não pushState — arrastar a régua não é
+    // navegar, e encher o histórico do navegador faria o botão Voltar do
+    // celular deixar de sair da página.
+    function gravarEndereco() {
+        if (typeof history === 'undefined' || !history.replaceState) { return; }
+        var h = '#p=' + janelaAtual + (fimEscolhido === null ? '' : '@' + fimEscolhido);
+        try { history.replaceState(null, '', h); } catch (e) { /* about:blank etc. */ }
+    }
+
+    function lerEndereco() {
+        if (typeof location === 'undefined' || !location.hash) { return; }
+        var m = /[#&]p=([a-z0-9]+)(?:@(\d+))?/i.exec(location.hash);
+        if (!m || !DURACOES.hasOwnProperty(m[1])) { return; }
+        janelaAtual = m[1];
+        fimEscolhido = m[2] ? parseInt(m[2], 10) : null;
+        if (elPeriodo) {
+            Array.prototype.forEach.call(elPeriodo.querySelectorAll('button'), function (b) {
+                var ativo = b.dataset.janela === janelaAtual;
+                b.classList.toggle('is-ativo', ativo);
+                b.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+            });
+        }
+    }
+
+    function recarregarPeriodo() {
+        gravarEndereco();
+        atualizarRegua();
+        carregarSeries();
+        carregarRota();
     }
 
     function carregarSeries() {
         if (elGraficos && !elGraficos.innerHTML) {
             elGraficos.innerHTML = '<p class="sal-balanco__vazio">Carregando histórico…</p>';
         }
-        return buscar(cfg.series + '?janela=' + encodeURIComponent(janelaAtual)).then(desenharGraficos);
+        return buscar(cfg.series + paramsPeriodo()).then(desenharGraficos);
     }
 
     if (elPeriodo) {
@@ -618,8 +766,51 @@
                 b.classList.toggle('is-ativo', ativo);
                 b.setAttribute('aria-pressed', ativo ? 'true' : 'false');
             });
+
+            // Trocar a duração pode deixar a janela fixada pendurada fora do
+            // registro (30 dias terminando onde só cabiam 6 horas). Reancorar
+            // nas pontas é mais previsível que recusar o clique.
+            var lim = limitesRegua();
+            if (fimEscolhido !== null && lim) {
+                fimEscolhido = Math.max(lim.min, Math.min(lim.max, fimEscolhido));
+            } else if (!lim) {
+                fimEscolhido = null;
+            }
+
             elGraficos.innerHTML = '';
-            carregarSeries();
+            recarregarPeriodo();
+        });
+    }
+
+    if (elQuando) {
+        elQuando.addEventListener('input', function () {
+            var lim = limitesRegua();
+            if (!lim) { return; }
+            var v = parseInt(elQuando.value, 10);
+            // A ponta direita é "ao vivo", não "a janela que termina no último
+            // ponto": é o que devolve o painel ao servidor como fonte do
+            // "agora" e faz a atualização automática voltar a andar.
+            fimEscolhido = v >= PASSOS ? null : Math.round(lim.min + (lim.max - lim.min) * (v / PASSOS));
+
+            // O rótulo responde ao dedo; a busca espera a mão parar. Sem isso
+            // um arrasto vira dezenas de requisições — e quem lê está no 4G do
+            // barco, não no wi-fi de casa.
+            if (elIntervalo) {
+                elIntervalo.textContent = fimEscolhido === null
+                    ? 'Ao vivo — arraste para trás para ver um período anterior.'
+                    : rotuloIntervalo();
+            }
+            if (elAgora) { elAgora.hidden = fimEscolhido === null; }
+
+            if (adiar) { clearTimeout(adiar); }
+            adiar = setTimeout(function () { adiar = null; recarregarPeriodo(); }, 350);
+        });
+    }
+
+    if (elAgora) {
+        elAgora.addEventListener('click', function () {
+            fimEscolhido = null;
+            recarregarPeriodo();
         });
     }
 
@@ -642,8 +833,18 @@
         });
     }
 
-    function cicloPesado() {
-        buscar(cfg.rota).then(function (rota) {
+    /*
+     * O mapa segue a régua SÓ quando um momento é fixado.
+     *
+     * Ao vivo ele responde "onde ele está e por onde andou" — a travessia
+     * inteira, que é a vista icônica do painel e não deveria encolher porque
+     * alguém apertou "1 h" para olhar um gráfico. Com um período fixado a
+     * pergunta muda para "onde ele estava naquele momento", e aí o recorte é
+     * exatamente o que se quer ver.
+     */
+    function carregarRota() {
+        var iv = intervaloAtual();
+        return buscar(cfg.rota + (iv ? '?de=' + iv.de + '&ate=' + iv.ate : '')).then(function (rota) {
             var primeira = !rotaConhecida;
             rotaConhecida = true;
             if (!rota) {
@@ -655,6 +856,10 @@
             ultimaRota = rota;
             desenharMapa(ultimoAgora, rota);
         });
+    }
+
+    function cicloPesado() {
+        carregarRota();
         carregarSeries();
     }
 
@@ -669,13 +874,30 @@
     // tempo até o próximo tique — que pode demorar minutos.
     document.addEventListener('visibilitychange', function () {
         if (document.hidden) { return; }
-        if (Date.now() - ultimaBusca < 20000) { return; }   // não martelar ao alternar abas
+        // O intervalo é medido ANTES de `cicloVivo`, que reescreve
+        // `ultimaBusca` logo na primeira linha. Medindo depois, a diferença
+        // era sempre ~0 e `cicloPesado` nunca rodava aqui: quem voltasse à
+        // aba depois de uma hora via os cartões atualizarem e os gráficos e a
+        // rota continuarem parados no tempo, sem sinal nenhum de que estavam.
+        var desdeUltima = Date.now() - ultimaBusca;
+        if (desdeUltima < 20000) { return; }   // não martelar ao alternar abas
         cicloVivo();
-        if (Date.now() - ultimaBusca > INTERVALO_PESADO) { cicloPesado(); }
+        if (desdeUltima > INTERVALO_PESADO) { cicloPesado(); }
     });
+
+    // O endereço antes da primeira busca: quem abre um link compartilhado tem
+    // de cair direto no período dele, sem ver 24 h aparecerem e sumirem.
+    lerEndereco();
+    atualizarRegua();
 
     cicloVivo();
     cicloPesado();
     setInterval(cicloVivo, INTERVALO_VIVO);
+
+    // O ciclo pesado continua rodando com o período FIXADO, e de propósito: o
+    // produtor do barco guarda o que não conseguiu enviar e reenvia depois,
+    // então um pedaço do passado ainda ganha pontos. Como o pedido leva o
+    // mesmo `de`/`ate`, redesenhar não move a tela — é a diferença entre
+    // atualizar o que se está olhando e ser puxado de volta para agora.
     setInterval(cicloPesado, INTERVALO_PESADO);
 }());
