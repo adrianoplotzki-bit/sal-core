@@ -890,6 +890,22 @@
     lerEndereco();
     atualizarRegua();
 
+    // Colar um link com outro período numa aba JÁ ABERTA não recarrega nada —
+    // o navegador só troca o `#`. Sem este ouvinte a página ficaria no período
+    // anterior, e quem colou concluiria que o link do amigo está quebrado.
+    // `gravarEndereco` usa replaceState, que não dispara `hashchange`: não há
+    // laço entre os dois.
+    window.addEventListener('hashchange', function () {
+        var antes = janelaAtual + '@' + fimEscolhido;
+        lerEndereco();
+        if (janelaAtual + '@' + fimEscolhido !== antes) {
+            elGraficos.innerHTML = '';
+            atualizarRegua();
+            carregarSeries();
+            carregarRota();
+        }
+    });
+
     cicloVivo();
     cicloPesado();
     setInterval(cicloVivo, INTERVALO_VIVO);
