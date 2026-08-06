@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.18.2' );
+define( 'SAL_CORE_VERSION', '0.18.3' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -877,8 +877,14 @@ function sal_core_metricas() {
      * teto útil, então nem entra aqui.
      */
     return array(
+        // Escala FIXA de 0 a 100: `limites` e `escala_minima` iguais fazem o
+        // eixo ser sempre o mesmo, independentemente do dia. Uma bateria que
+        // oscilou de 85 a 92 % desenhava, com eixo ajustado, a mesma montanha
+        // de uma que caiu de 100 a 20 — e a leitura só se corrigia conferindo
+        // os números do eixo, que é o que ninguém faz. Com a escala fixa, a
+        // altura da linha significa a mesma coisa em qualquer período.
         'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false,
-                                   'limites' => array( 0, 100 ) ),
+                                   'limites' => array( 0, 100 ), 'escala_minima' => array( 0, 100 ) ),
         'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false,
                                    'col_min' => 'depth_min', 'col_max' => 'depth_max',
                                    'limites' => array( 0, null ) ),
