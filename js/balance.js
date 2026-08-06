@@ -120,7 +120,41 @@
     // cartão de situação — um lugar só a dizer se a leitura é do momento.
     function texto(agora) {
         if (!agora || !agora.area) { return 'Sem transmissão do Balanço no momento.'; }
-        return 'Posição aproximada, num raio de ' + agora.area.raio_km + ' km.';
+
+        var raio = 'num raio de ' + agora.area.raio_km + ' km';
+        if (agora.transmitindo) {
+            return 'Posição aproximada, ' + raio + '.';
+        }
+
+        /*
+         * DADO VELHO PRECISA DIZER QUE É VELHO.
+         *
+         * Até 2026-08-06 esta legenda dizia "Posição aproximada, num raio de
+         * 78 km" tanto com o barco transmitindo quanto com a última leitura
+         * de dois dias atrás. Os cartões (situação, bateria, profundidade)
+         * também não mudavam. O único sinal era um PONTO que deixava de
+         * acender — invisível para quem não sabe que ele existe.
+         *
+         * O Adriano estava navegando, viu a posição parada em Maceió e
+         * concluiu que o site tinha quebrado. Ele não tinha quebrado: estava
+         * mostrando fielmente a última leitura, e calando a idade dela.
+         *
+         * Preferir o dado antigo a apagar a tela continua certo (um soluço
+         * de sinal não pode zerar o painel). O que faltava era o rótulo.
+         */
+        var quando = agora.atualizado_em && Date.parse(agora.atualizado_em);
+        if (!quando) {
+            return 'Última posição conhecida, ' + raio + ' — o Balanço não está transmitindo.';
+        }
+
+        var idade = Date.now() - quando;
+        var p = partes(quando / 1000);
+        var desde = idade < 36 * 3600e3
+            ? 'às ' + p.hora
+            : 'em ' + p.dia + ', às ' + p.hora;
+
+        return 'Última posição conhecida, ' + raio + '. O Balanço não transmite desde ' +
+               desde + '.';
     }
 
     /*
