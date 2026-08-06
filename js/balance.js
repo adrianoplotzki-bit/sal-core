@@ -418,11 +418,30 @@
             });
         }
 
-        var min = Math.min.apply(null, extremos);
-        var max = Math.max.apply(null, extremos);
+        var baixo = Math.min.apply(null, extremos);
+        var alto = Math.max.apply(null, extremos);
+        var min = baixo, max = alto;
         if (max - min < 1e-9) { min -= 1; max += 1; }   // série constante vira linha no meio
         var folga = (max - min) * 0.12;
         min -= folga; max += folga;
+
+        // A folga não pode inventar valor impossível. Numa bateria a 100% ela
+        // desenhava um eixo até 106,6%, e escala que passa do máximo faz
+        // duvidar do número: se 106 existe, 100 não é cheio.
+        //
+        // O limite só entra quando os DADOS já estão dentro dele — assim ele
+        // nunca corta a linha. Se um dia chegar leitura fora da faixa, o
+        // gráfico a mostra inteira, que é como se percebe o defeito.
+        var lim = serie.limites;
+        if (lim) {
+            if (lim[0] !== null && lim[0] !== undefined && baixo >= lim[0]) {
+                min = Math.max(min, lim[0]);
+            }
+            if (lim[1] !== null && lim[1] !== undefined && alto <= lim[1]) {
+                max = Math.min(max, lim[1]);
+            }
+            if (max - min < 1e-9) { max = min + 1; }   // tudo colado no limite
+        }
 
         // t0/t1 vêm do recorte COMUM da resposta, não do primeiro e último
         // ponto desta série. Cada gráfico com o próprio eixo faria curvas de

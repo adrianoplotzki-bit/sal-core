@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.17.1' );
+define( 'SAL_CORE_VERSION', '0.17.2' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -781,15 +781,30 @@ function sal_core_get_rota( WP_REST_Request $request ) {
  * escalares que não apontam para lugar nenhum.
  */
 function sal_core_metricas() {
+    /*
+     * `limites` é o intervalo FISICAMENTE possível da grandeza, e existe só
+     * para segurar o eixo do gráfico. Não é validação — quem recusa medição
+     * absurda é `sal_core_valid_num()`, na ingestão.
+     *
+     * O gráfico dá 12% de folga em volta dos dados para a linha não encostar
+     * na borda. Numa bateria a 100% isso desenhava um eixo indo até 106,6%,
+     * e uma escala que passa do máximo possível faz o leitor duvidar do
+     * número: se 106 existe, então 100 não é cheio. `null` num dos lados
+     * significa "sem limite daquele lado" — a temperatura da água não tem
+     * teto útil, então nem entra aqui.
+     */
     return array(
-        'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false ),
+        'bateria_pct'    => array( 'col' => 'soc',        'rotulo' => 'Bateria',      'unidade' => '%',  'cor' => '#059669', 'bolha' => false,
+                                   'limites' => array( 0, 100 ) ),
         'profundidade_m' => array( 'col' => 'depth',      'rotulo' => 'Profundidade', 'unidade' => 'm',  'cor' => '#1a5b8f', 'bolha' => false,
-                                   'col_min' => 'depth_min', 'col_max' => 'depth_max' ),
+                                   'col_min' => 'depth_min', 'col_max' => 'depth_max',
+                                   'limites' => array( 0, null ) ),
         // A faixa min..max transforma "12 nós" em "12 nós, variando de 8 a 19".
         // Num canal de vela a rajada é metade da história; média sozinha a
         // apaga, e é justamente o pico que decide se o dia foi duro.
         'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento',        'unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false,
-                                   'col_min' => 'aws_min', 'col_max' => 'aws_max' ),
+                                   'col_min' => 'aws_min', 'col_max' => 'aws_max',
+                                   'limites' => array( 0, null ) ),
         'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',         'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
         // `bolha => false` desde 2026-08-06, por decisão do Adriano.
         //
@@ -802,7 +817,8 @@ function sal_core_metricas() {
         //
         // O custo assumido está no §5 do CLAUDE.md, junto com a razão. O
         // rumo continua retido.
-        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => false ),
+        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => false,
+                                   'limites' => array( 0, null ) ),
     );
 }
 
@@ -1194,6 +1210,9 @@ function sal_core_get_series( WP_REST_Request $request ) {
         );
         if ( $tem_faixa ) {
             $serie['faixa'] = $faixa;
+        }
+        if ( ! empty( $m['limites'] ) ) {
+            $serie['limites'] = $m['limites'];
         }
 
         $series[ $chave ] = $serie;
