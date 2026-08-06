@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Definições básicas do plugin. As constantes tornam fácil mudar
  * diretórios ou a versão sem ter que alterar múltiplos pontos de código.
  */
-define( 'SAL_CORE_VERSION', '0.16.4' );
+define( 'SAL_CORE_VERSION', '0.17.0' );
 // Versão do schema da wp_sal_track. Subir isto dispara a migração (ver
 // sal_core_maybe_upgrade) no primeiro carregamento após o deploy.
 define( 'SAL_CORE_DB_VERSION', '5' );
@@ -664,6 +664,17 @@ function sal_core_get_agora() {
         'depth'      => 'profundidade_m',
         'aws'        => 'vento_no',
         'water_temp' => 'agua_c',
+        // VELOCIDADE: publicada por DECISÃO do Adriano em 2026-08-06.
+        //
+        // Até esta data ela era retida, e a razão está no §5: velocidade
+        // integrada a partir de um ponto conhecido dá a distância
+        // percorrida, e distância somada à linha de costa estreita a
+        // posição. A decisão foi tomada com esse custo na mesa.
+        //
+        // O RUMO CONTINUA FORA, e isso não é descuido: é ele que transforma
+        // distância em posição. Sem rumo, o que se obtém é um círculo de
+        // raio d — com rumo, um ponto. Não publicar `cog` nem `heading`.
+        'sog'        => 'velocidade_no',
     );
     foreach ( $mapa_vitais as $col => $rotulo ) {
         if ( isset( $ultimo[ $col ] ) && $ultimo[ $col ] !== null ) {
@@ -682,7 +693,7 @@ function sal_core_get_agora() {
         'atualizado_em' => gmdate( 'Y-m-d\TH:00:00\Z', $visto_em ),
         'mare'          => $mare,
         // "fundeado", "navegando"... não localiza e é o dado mais narrativo
-        // que temos. Sai inteiro; velocidade e rumo, não.
+        // que temos. Sai inteiro; o RUMO, não (ver o mapa de vitais).
         'estado'        => isset( $ultimo['estado'] ) ? $ultimo['estado'] : null,
         'area'          => array(
             'lat'     => round( $centro[0], 4 ),
@@ -780,7 +791,18 @@ function sal_core_metricas() {
         'vento_no'       => array( 'col' => 'aws',        'rotulo' => 'Vento',        'unidade' => 'nós','cor' => '#7c3aed', 'bolha' => false,
                                    'col_min' => 'aws_min', 'col_max' => 'aws_max' ),
         'agua_c'         => array( 'col' => 'water_temp', 'rotulo' => 'Água',         'unidade' => '°C', 'cor' => '#ea580c', 'bolha' => false ),
-        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => true ),
+        // `bolha => false` desde 2026-08-06, por decisão do Adriano.
+        //
+        // Enquanto era `true`, esta série era cortada em
+        // `sal_core_corte_velocidade()`: só saía velocidade de pontos a 2
+        // células da atual. Na prática isso a escondia SEMPRE — em seis dias
+        // de telemetria, 1849 pontos ficaram ocultos e nenhum foi publicado,
+        // porque o barco navega em pernas costeiras bem menores que 220 km.
+        // O gráfico existia e nunca aparecia.
+        //
+        // O custo assumido está no §5 do CLAUDE.md, junto com a razão. O
+        // rumo continua retido.
+        'velocidade_no'  => array( 'col' => 'sog',        'rotulo' => 'Velocidade',   'unidade' => 'nós','cor' => '#0891b2', 'bolha' => false ),
     );
 }
 
@@ -1113,8 +1135,19 @@ function sal_core_get_series( WP_REST_Request $request ) {
         ARRAY_A
     );
 
-    $corte = sal_core_corte_velocidade();
-    $corte_unix = $corte ? strtotime( $corte . ' UTC' ) : null;
+    // Só calcula o corte se ALGUMA métrica ainda passar pela bolha. Desde
+    // 2026-08-06 nenhuma passa, e `sal_core_corte_velocidade()` varre até
+    // 5000 linhas — rodá-la a cada requisição para descartar o resultado
+    // seria pagar a varredura por nada. O mecanismo fica de pé para a
+    // próxima métrica que dependa de posição.
+    $corte_unix = null;
+    foreach ( $metricas as $m ) {
+        if ( ! empty( $m['bolha'] ) ) {
+            $corte      = sal_core_corte_velocidade();
+            $corte_unix = $corte ? strtotime( $corte . ' UTC' ) : null;
+            break;
+        }
+    }
 
     $series = array();
     foreach ( $metricas as $chave => $m ) {

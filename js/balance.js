@@ -55,7 +55,11 @@
         { chave: 'bateria_pct', rotulo: 'Bateria', unidade: '%' },
         { chave: 'profundidade_m', rotulo: 'Profundidade', unidade: 'm' },
         { chave: 'vento_no', rotulo: 'Vento', unidade: 'nós' },
-        { chave: 'agua_c', rotulo: 'Água', unidade: '°C' }
+        { chave: 'agua_c', rotulo: 'Água', unidade: '°C' },
+        // Velocidade entrou em 2026-08-06, por decisão do Adriano. Até então
+        // era retida pela regra da bolha — ver sal_core_metricas() no plugin.
+        // O RUMO continua fora: é ele que transforma distância em posição.
+        { chave: 'velocidade_no', rotulo: 'Velocidade', unidade: 'nós' }
     ];
 
     /*
